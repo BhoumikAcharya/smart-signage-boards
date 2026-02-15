@@ -1,24 +1,26 @@
 Modbus-to-MQTT Bridge for Metro Emergency Signage
 
 Overview
-This project is a proof-of-concept for a smart emergency light signage system, designed for reliable operation in public transit environments like metros. It implements a robust communication bridge on a Raspberry Pi, designed to integrate a central industrial control system (using Modbus) with a distributed network of wireless emergency signs (using MQTT).
+This project is a proof-of-concept for a smart EROS, designed for reliable operation in public transit environments like metros. It implements a robust communication bridge on a Raspberry Pi, designed to integrate a central industrial control system (using Modbus) with a distributed network of wireless emergency signs (using MQTT), all through ethrnet ocnnectivity. Making the product implemented on a complete local network.
 
 This architecture allows a central control room to instantly and reliably activate or change emergency signage across multiple locations in a station or tunnel, using a combination of industrial-grade protocols and modern IoT technology.
 
 System Architecture
 The project is built on a decoupled, hub-and-spoke architecture, which is ideal for critical systems:
 
-Central Control (PLC/Modbus Master): The primary industrial controller, likely located in a central control room. It initiates commands by sending standard Modbus "Write Coil" requests to the Raspberry Pi.
+Central Control (PLC/Modbus Master): The primary industrial controller, located in a central control room. It initiates commands by sending standard Modbus "Write Multiple Holding Registers (16(ox10))" requests to the Raspberry Pi.
 
-Raspberry Pi (The Bridge & Broker): This is the core of the system and performs two critical roles simultaneously:
+Raspberry Pi (The Bridge & Broker): This is the core of the system and performs three critical roles simultaneously:
 
 Modbus TCP Server: A Python script runs continuously, listening for commands from the central controller and updating an internal data model.
 
 MQTT Broker: The industry-standard Mosquitto broker runs as a service, managing all communication with the wireless signage units.
 
+Industrial HMI: A 7inch Capacitive touch HMI is connected to the RaspberryPi with manual override.
+
 Emergency Signs (ESP32 Clients): Each emergency light signage unit is powered by an ESP32.
 
-The ESP32s connect to the Raspberry Pi over Wi-Fi.
+The ESP32s connect to the Raspberry Pi over Ethernet with a ETH PHY module called the LAN8720.
 
 They subscribe to specific MQTT topics and wait for commands.
 
@@ -33,19 +35,24 @@ Scalable: Easily add or remove signage units across a station without any change
 
 Decoupled & Robust: The central controller does not need to know anything about the individual signs, and the signs do not need to know about the controller. This separation makes the system highly reliable and easy to maintain.
 
-Custom Logic: The bridge script contains specific control logic, allowing complex actions (e.g., one Modbus coil activating a whole group of signs) to be easily implemented.
+Custom Logic: The bridge script contains specific control logic, allowing complex actions to be easily implemented.
 
 Components
 Hardware
-Raspberry Pi (any model with Wi-Fi/Ethernet)
+This is the list of components that i have used (feel free to experiment on your own as well)
+Raspberry Pi 5(8GB RAM with Ethernet)
 
 ESP32 Development Boards
 
-Relay Modules (to switch power to the LED signage)
+5V Dual Channel Relay Modules (to switch power to the LED signage)
 
 LED Signage
 
 PLC or Modbus Master Simulator (like Modscan) for testing
+
+14.5V PSU (Preferrably a battery charger w/o XT60 connectors)
+
+12.8V LFP Battery (For ample battery backup)
 
 Software & Libraries
 Raspberry Pi:
