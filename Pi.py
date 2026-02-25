@@ -87,7 +87,7 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                     addr = 40001 + i
                     topic = f"{MQTT_TOPIC_PREFIX}/{addr}/value"
                     payload = str(current_values[i])
-                    mqtt_client.publish(topic, payload)
+                    mqtt_client.publish(topic, payload, retain=True)
                     last_known_values[i] = current_values[i]
             
             # --- Updated Table Display ---
