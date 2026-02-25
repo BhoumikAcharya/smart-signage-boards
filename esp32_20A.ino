@@ -7,46 +7,40 @@ const char* mqtt_server_ip = "192.168.1.10"; // Raspberry Pi IP
 const int mqtt_port = 1883;
 
 // Unique Register Assignment (CHANGE THIS FOR EACH UNIT)
-const int ASSIGNED_REGISTER = 40007;
+const int ASSIGNED_REGISTER = 40008;
 
 // Static IP Settings (CHANGE THIS FOR EACH UNIT)
-IPAddress local_IP(192, 168, 1, 107); // Unique Static IP
-IPAddress gateway(192, 168, 1, 1);    // Router/Gateway IP
-IPAddress subnet(255, 255, 255, 0);   // Subnet Mask
+IPAddress local_IP(192, 168, 1, 108); 
+IPAddress gateway(192, 168, 1, 1);    
+IPAddress subnet(255, 255, 255, 0);   
 IPAddress primaryDNS(8, 8, 8, 8);
 IPAddress secondaryDNS(8, 8, 4, 4);
 
-// --- CURRENT SENSOR CALIBRATION (FROM TESTED CODE) ---
+// --- CURRENT SENSOR CALIBRATION ---
 const float ADC_REF_VOLT = 3.3;
+const float SENSITIVITY_1 = 0.146; 
+const float SENSITIVITY_2 = 0.146; 
+const float ZERO_VOLT_1  = 2.40; 
+const float ZERO_VOLT_2  = 2.4; 
+const float ALPHA        = 0.15;  
 
-// Sensitivity Settings (185mV/A for ACS712-05B, 100mV/A for 20A, 66mV/A for 30A)
-const float SENSITIVITY_1 = 0.162; // Sensitivity for Sensor 1
-const float SENSITIVITY_2 = 0.142; // Sensitivity for Sensor 2
-
-const float ZERO_VOLT_1  = 2.515; // Calibrated Zero for Sensor 1
-const float ZERO_VOLT_2  = 2.520; // Calibrated Zero for Sensor 2
-const float ALPHA        = 0.15;  // Low Pass Filter Alpha
-
-// Current Thresholds (in Amps)
 const float CURRENT_THRESHOLD_1 = 0.100;
 const float CURRENT_THRESHOLD_2 = 0.120;
-
-// ---------------------------------------------------------------
 
 // GPIO Pins
 const int RELAY_1_PIN = 4;
 const int RELAY_2_PIN = 13;
-const int POWER_MONITOR_PIN = 34; // Input-only pin for Voltage
-const int CURRENT_PIN_1 = 35;     // ACS712 Sensor 1
-const int CURRENT_PIN_2 = 36;     // ACS712 Sensor 2
+const int POWER_MONITOR_PIN = 34; 
+const int CURRENT_PIN_1 = 35;     
+const int CURRENT_PIN_2 = 36;     
 
-// Ethernet PHY Configuration (LAN8720)
-#define ETH_PHY_ADDR    1
-#define ETH_PHY_POWER  -1
-#define ETH_PHY_MDC     23
-#define ETH_PHY_MDIO    18
-#define ETH_PHY_TYPE    ETH_PHY_LAN8720
-#define ETH_CLK_MODE    ETH_CLOCK_GPIO17_OUT
+// Ethernet PHY Configuration (Standard Arduino IDE)
+#define ETH_PHY_ADDR  1
+#define ETH_PHY_POWER -1
+#define ETH_PHY_MDC   23
+#define ETH_PHY_MDIO  18
+#define ETH_PHY_TYPE  ETH_PHY_LAN8720
+#define ETH_CLK_MODE  ETH_CLOCK_GPIO17_OUT
 
 // MQTT Topics
 char control_topic[50];
@@ -54,7 +48,7 @@ char status_topic[50];
 char power_topic[50];
 char current1_topic[50];
 char current2_topic[50];
-const char* scan_topic = "metro/signage/scan"; // Broadcast topic
+const char* scan_topic = "metro/signage/scan"; 
 
 WiFiClient ethClient;
 PubSubClient client(ethClient);
@@ -62,21 +56,22 @@ long lastReconnectAttempt = 0;
 static bool eth_connected = false;
 
 // Power Monitoring Variables
-const int POWER_THRESHOLD = 3300;
+const int POWER_THRESHOLD = 1800;  
 const unsigned long DEBOUNCE_DELAY = 50; 
 bool pwr_stableState = false;
 bool pwr_lastReading = false;
 unsigned long pwr_lastDebounceTime = 0;
 
-// Current Monitoring Variables
+// Current Monitoring Variables 
 float filteredCurrent1 = 0.0;
 float filteredCurrent2 = 0.0;
-String lastCurrentState1 = "---";
-String lastCurrentState2 = "---";
+const char* lastCurrentState1 = "---";
+const char* lastCurrentState2 = "---";
 unsigned long lastCurrentReadTime = 0;
-const long CURRENT_READ_INTERVAL = 500; // Read every 500ms
+const long CURRENT_READ_INTERVAL = 500; 
 
-void eth_event_handler(WiFiEvent_t event) {
+// Updated Event Handler for modern Arduino IDE compatibility
+void eth_event_handler(arduino_event_id_t event) {
   switch (event) {
     case ARDUINO_EVENT_ETH_START:
       Serial.println("ETH Started");
@@ -106,40 +101,39 @@ void eth_event_handler(WiFiEvent_t event) {
   }
 }
 
-// Helper to publish all statuses (Used on Connect and on PING)
+// Helper to publish all statuses
 void publish_all_status() {
-  // 1. Publish ONLINE status with IP
-  String onlineMsg = "ONLINE:" + ETH.localIP().toString();
-  client.publish(status_topic, onlineMsg.c_str(), true);
+  char onlineMsg[30];
+  snprintf(onlineMsg, sizeof(onlineMsg), "ONLINE:%s", ETH.localIP().toString().c_str());
+  client.publish(status_topic, onlineMsg, true);
   
-  // 2. Publish Power Status
   int raw = analogRead(POWER_MONITOR_PIN);
   pwr_stableState = (raw > POWER_THRESHOLD);
-  String pwrMsg = pwr_stableState ? "OK" : "FAIL";
-  client.publish(power_topic, pwrMsg.c_str(), true);
+  const char* pwrMsg = pwr_stableState ? "OK" : "FAIL"; 
+  client.publish(power_topic, pwrMsg, true);
 
-  // 3. Publish Current Status (Force send current state)
-  client.publish(current1_topic, lastCurrentState1.c_str(), true);
-  client.publish(current2_topic, lastCurrentState2.c_str(), true);
+  client.publish(current1_topic, lastCurrentState1, true);
+  client.publish(current2_topic, lastCurrentState2, true);
 
   Serial.println(">>> Reported Full Status");
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  String message;
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
+  char msgBuffer[16]; 
   
-  // --- Check for Broadcast PING ---
-  if (String(topic) == scan_topic && message == "PING") {
+  unsigned int copyLength = (length < sizeof(msgBuffer) - 1) ? length : (sizeof(msgBuffer) - 1);
+  
+  memcpy(msgBuffer, payload, copyLength);
+  msgBuffer[copyLength] = '\0'; 
+
+  if (strcmp(topic, scan_topic) == 0 && strcmp(msgBuffer, "PING") == 0) {
     Serial.println("\n[PING] Received Broadcast Ping.");
     publish_all_status();
     return;
   }
 
   // --- Relay Control Logic ---
-  int control_value = message.toInt();
+  int control_value = atoi(msgBuffer); 
   Serial.printf("Received Relay Command: %d\n", control_value);
 
   switch (control_value) {
@@ -156,7 +150,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// --- CURRENT SENSOR LOGIC (Merged from Tested Code) ---
 void checkCurrentSensors() {
   if (millis() - lastCurrentReadTime < CURRENT_READ_INTERVAL) return;
   lastCurrentReadTime = millis();
@@ -168,20 +161,16 @@ void checkCurrentSensors() {
   }
   float avgADC1 = totalADC1 / 150.0;
   float voltage1 = (avgADC1 / 4095.0) * ADC_REF_VOLT;
-  // Use SENSITIVITY_1
   float rawCurrent1 = (voltage1 - ZERO_VOLT_1) / SENSITIVITY_1;
   
-  if (abs(rawCurrent1) < 0.06) rawCurrent1 = 0; // Deadzone
+  if (abs(rawCurrent1) < 0.06) rawCurrent1 = 0; 
   filteredCurrent1 = abs((rawCurrent1 * ALPHA) + (filteredCurrent1 * (1 - ALPHA)));
 
-  // Determine State 1
-  String currentState1 = (filteredCurrent1 > CURRENT_THRESHOLD_1) ? "OK" : "FAIL";
+  const char* currentState1 = (filteredCurrent1 > CURRENT_THRESHOLD_1) ? "OK" : "FAIL";
 
-  // Publish if changed
-  if (currentState1 != lastCurrentState1) {
+  if (strcmp(currentState1, lastCurrentState1) != 0) {
     lastCurrentState1 = currentState1;
-    client.publish(current1_topic, currentState1.c_str(), true);
-    // Serial.printf("S1: %.2fA -> %s\n", filteredCurrent1, currentState1.c_str());
+    client.publish(current1_topic, currentState1, true);
   }
 
   // --- SENSOR 2 ---
@@ -191,24 +180,17 @@ void checkCurrentSensors() {
   }
   float avgADC2 = totalADC2 / 150.0;
   float voltage2 = (avgADC2 / 4095.0) * ADC_REF_VOLT;
-  // Use SENSITIVITY_2
   float rawCurrent2 = (voltage2 - ZERO_VOLT_2) / SENSITIVITY_2;
   
-  if (abs(rawCurrent2) < 0.06) rawCurrent2 = 0; // Deadzone
+  if (abs(rawCurrent2) < 0.06) rawCurrent2 = 0; 
   filteredCurrent2 = abs((rawCurrent2 * ALPHA) + (filteredCurrent2 * (1 - ALPHA)));
 
-  // Determine State 2
-  String currentState2 = (filteredCurrent2 > CURRENT_THRESHOLD_2) ? "OK" : "FAIL";
+  const char* currentState2 = (filteredCurrent2 > CURRENT_THRESHOLD_2) ? "OK" : "FAIL";
 
-  // Publish if changed
-  if (currentState2 != lastCurrentState2) {
+  if (strcmp(currentState2, lastCurrentState2) != 0) {
     lastCurrentState2 = currentState2;
-    client.publish(current2_topic, currentState2.c_str(), true);
-    // Serial.printf("S2: %.2fA -> %s\n", filteredCurrent2, currentState2.c_str());
+    client.publish(current2_topic, currentState2, true);
   }
-
-  // --- LIVE DEBUGGING FOR TESTING PURPOSES ---
-  Serial.printf("[TEST] S1: %.3fV / %.3fA  |  S2: %.3fV / %.3fA\n", voltage1, filteredCurrent1, voltage2, filteredCurrent2);
 }
 
 void checkPowerMonitor() {
@@ -223,35 +205,22 @@ void checkPowerMonitor() {
   if ((millis() - pwr_lastDebounceTime) > DEBOUNCE_DELAY) {
     if (currentReading != pwr_stableState) {
       pwr_stableState = currentReading;
-      String payload = pwr_stableState ? "OK" : "FAIL";
-      client.publish(power_topic, payload.c_str(), true);
-      Serial.printf(">> Power Changed: %s\n", payload.c_str());
+      const char* payload = pwr_stableState ? "OK" : "FAIL";
+      client.publish(power_topic, payload, true);
+      Serial.printf(">> Power Changed: %s\n", payload);
     }
   }
-
-  //For Testing the PSU Failure Code!!!!!
-  //Serial.println(analogValue);
-
 }
-
-/*
- * Author:
-  * Date:
- * Description:
- * Called from function:
- * 
-
-*/
-
 
 boolean mqtt_connect() {
   if (!eth_connected) return false;
   
   Serial.print("Attempting MQTT connection...");
-  String clientId = "ESP32EthClient-";
-  clientId += ETH.macAddress();
+  
+  char clientId[30];
+  snprintf(clientId, sizeof(clientId), "ESP32EthClient-%s", ETH.macAddress().c_str());
 
-  if (client.connect(clientId.c_str(), status_topic, 1, true, "OFFLINE")) {
+  if (client.connect(clientId, status_topic, 1, true, "OFFLINE")) {
     Serial.println("Connected!");
     client.subscribe(control_topic);
     client.subscribe(scan_topic);
@@ -266,7 +235,6 @@ void setup() {
   Serial.begin(115200);
   delay(100);
 
-  // Hardware Setup
   pinMode(RELAY_1_PIN, OUTPUT);
   pinMode(RELAY_2_PIN, OUTPUT);
   digitalWrite(RELAY_1_PIN, HIGH);
@@ -276,11 +244,9 @@ void setup() {
   pinMode(CURRENT_PIN_1, INPUT);
   pinMode(CURRENT_PIN_2, INPUT);
 
-  // ADC Settings
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  // String Setup
   sprintf(control_topic, "metro/signage/register/%d/value", ASSIGNED_REGISTER);
   sprintf(status_topic, "metro/signage/register/%d/status", ASSIGNED_REGISTER);
   sprintf(power_topic, "metro/signage/register/%d/power", ASSIGNED_REGISTER);
@@ -288,14 +254,13 @@ void setup() {
   sprintf(current2_topic, "metro/signage/register/%d/current2", ASSIGNED_REGISTER);
 
   Serial.printf("\n--- ESP32 Ethernet Signage Controller (%d) ---\n", ASSIGNED_REGISTER);
-  Serial.printf("Calibrated Zero Points: S1=%.3fV, S2=%.3fV\n", ZERO_VOLT_1, ZERO_VOLT_2);
-
-  // Ethernet Setup
+  
   WiFi.onEvent(eth_event_handler);
+  
+  // Standard Arduino IDE Ethernet Initialization (ESP32 Core v3.x Argument Order)
   ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
   ETH.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
 
-  // MQTT Setup
   client.setServer(mqtt_server_ip, mqtt_port);
   client.setCallback(callback);
   client.setKeepAlive(4);
