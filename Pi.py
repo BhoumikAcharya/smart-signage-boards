@@ -92,6 +92,21 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
 
     while True:
         try:
+            # --- MUX LOGIC (Hand/Off/Auto) ---
+            # Read Control Flag (43001 -> Address 3000)
+            mux_flag = modbus_context[0].getValues(3, 3000, count=1)[0]
+
+            if mux_flag == 1:
+                # Manual/HMI Mode: Copy 41001+ (Address 1000) to 40001+ (Address 0)
+                hmi_values = modbus_context[0].getValues(3, 1000, count=REGISTERS_TO_BRIDGE)
+                modbus_context[0].setValues(3, 0, hmi_values)
+            else:
+                # Auto/SCADA Mode: Copy 42001+ (Address 2000) to 40001+ (Address 0)
+                scada_values = modbus_context[0].getValues(3, 2000, count=REGISTERS_TO_BRIDGE)
+                modbus_context[0].setValues(3, 0, scada_values)
+            # -----------------------------
+
+            # Now read the ACTUAL output zone (40001+)
             current_values = modbus_context[0].getValues(3, 0, count=REGISTERS_TO_BRIDGE)
 
             for i in range(REGISTERS_TO_BRIDGE):
@@ -110,6 +125,11 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                 
                 print("--- Metro Signage Modbus-MQTT Bridge ---")
                 print(f"PLC -> Modbus -> MQTT -> ESP32s")
+                
+                # Show active MUX mode on the dashboard
+                mode_text = "HMI (MANUAL)" if mux_flag == 1 else "SCADA (AUTO)"
+                print(f"CURRENT MUX MODE: {mode_text} (Flag 43001: {mux_flag})")
+                
                 # Wider table for Current
                 print("+------------+---------+----------+-----------------+----------+----------+----------+")
                 print("| Register   |  Value  |  Status  |   IP Address    |  Power   | Load 1   | Load 2   |")
@@ -156,7 +176,8 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
 if __name__ == '__main__':
     mqtt_client = None
     try:
-        store = ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0] * 100))
+        # Expanded Modbus memory block to 3500 to cover addresses up to 43500
+        store = ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0] * 3500))
         context = ModbusServerContext(slaves=store, single=True)
 
         mqtt_client = mqtt.Client("ModbusBridgeClient")
