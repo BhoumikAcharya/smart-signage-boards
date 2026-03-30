@@ -12,10 +12,11 @@ MODBUS_PORT = 502       # UPDATED: Standard Modbus Port
 
 # 2. REGISTER SETTINGS
 # Note: Standard Modbus maps Register 40001 to Address 0
-REG_CONTROL_VAL = 0     # Target: Holding Register 40001
-REG_MANUAL_STATUS = 10  # Target: Holding Register 40011 (Manual Mode Flag)
+REG_ACTUAL_VAL = 0      # Target: Holding Register 40001 (Output State)
+REG_HMI_CONTROL = 1000  # Target: Holding Register 41001 (HMI Zone)
+REG_FLAG_MUX = 3000     # Target: Holding Register 43001 (0=SCADA, 1=HMI)
 
-# 3. MQTT SETTINGS (ESP32 Connection)
+# 3. MQTT SETTINGS (ESP32 Connection) - NOT USED DIRECTLY ANYMORE
 MQTT_BROKER = '127.0.0.1'
 MQTT_PORT = 1883
 # Matches your ESP32 Code: "metro/signage/register/40001/value"
@@ -96,7 +97,7 @@ class IndustrialHMI:
         self.root.after(500, self.sync_loop)
 
     def toggle_mode(self):
-        """Switches between Auto (PLC) and Manual (User)"""
+        """Switches between Auto (SCADA) and Manual (HMI)"""
         self.manual_mode = not self.manual_mode
         
         if self.manual_mode:
@@ -105,18 +106,18 @@ class IndustrialHMI:
             self.btn_r1.config(state="normal", bg="#c0392b")
             self.btn_r2.config(state="normal", bg="#c0392b")
             
-            # Notify PLC via Modbus (Address 10 -> Register 40011)
-            # Writing 1 tells the PLC "I have control now"
-            mb_client.write_register(REG_MANUAL_STATUS, 1) 
+            # Notify Pi MUX via Modbus (Address 3000 -> Register 43001)
+            # Writing 1 tells the MUX "Copy HMI Zone to Output Zone"
+            mb_client.write_register(REG_FLAG_MUX, 1) 
             
         else:
             # AUTO MODE ACTIVE
-            self.mode_btn.config(text="MODE: AUTO (PLC)", bg="#27ae60")
+            self.mode_btn.config(text="MODE: AUTO (SCADA)", bg="#27ae60")
             self.btn_r1.config(state="disabled", bg="gray")
             self.btn_r2.config(state="disabled", bg="gray")
             
-            # Notify PLC via Modbus
-            mb_client.write_register(REG_MANUAL_STATUS, 0)
+            # Notify Pi MUX via Modbus (Writing 0 -> SCADA Control)
+            mb_client.write_register(REG_FLAG_MUX, 0)
 
     def toggle_relay(self, relay_num):
         """Manual toggle logic - only works in Manual Mode"""
@@ -143,41 +144,37 @@ class IndustrialHMI:
             self.btn_r2.config(text="RELAY 2: OFF", bg="#c0392b") # Red
 
     def send_command(self):
-        """Calculates 0-3 payload and sends to MQTT and Modbus"""
+        """Calculates 0-3 payload and sends to HMI Modbus Zone"""
         # Calculate Logic: 0=Off/Off, 1=On/Off, 2=Off/On, 3=On/On
         command_val = 0
         if self.r1_state and not self.r2_state: command_val = 1
         if not self.r1_state and self.r2_state: command_val = 2
         if self.r1_state and self.r2_state: command_val = 3
         
-        # 1. Send to MQTT (For ESP32)
-        mqtt_client.publish(MQTT_TOPIC, str(command_val))
-        print(f"SENT MQTT: {command_val}")
-        
-        # 2. Update Modbus Register 40001 (So PLC sees the current state too)
-        mb_client.write_register(REG_CONTROL_VAL, command_val)
+        # Update Modbus Register 41001 (HMI Zone)
+        # The Pi MUX will automatically route this to 40001 and publish to MQTT
+        mb_client.write_register(REG_HMI_CONTROL, command_val)
+        print(f"SENT MODBUS: {command_val} to HMI Zone (41001)")
 
     def sync_loop(self):
-        """The Heartbeat: Reads from PLC or Updates Status"""
+        """The Heartbeat: Reads from Output Zone to update UI"""
         if not self.manual_mode:
-            # --- AUTO MODE: LISTEN TO PLC ---
+            # --- AUTO MODE: LISTEN TO ACTUAL OUTPUT ---
             try:
                 # Read Register 40001 (Address 0)
-                rr = mb_client.read_holding_registers(REG_CONTROL_VAL, 1)
+                rr = mb_client.read_holding_registers(REG_ACTUAL_VAL, 1)
                 
                 if not rr.isError():
                     plc_val = rr.registers[0]
                     
-                    # Only act if the PLC has changed the value
+                    # Only act if the output has changed
                     if plc_val != self.last_plc_val:
-                        print(f"PLC UPDATE RECEIVED: {plc_val}")
+                        print(f"OUTPUT UPDATE RECEIVED: {plc_val}")
                         
                         # Update Local Variables
                         self.r1_state = (plc_val == 1 or plc_val == 3)
                         self.r2_state = (plc_val == 2 or plc_val == 3)
                         
-                        # Forward to ESP32 via MQTT
-                        mqtt_client.publish(MQTT_TOPIC, str(plc_val))
                         self.last_plc_val = plc_val
                         
                         # Update Visuals
