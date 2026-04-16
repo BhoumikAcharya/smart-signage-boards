@@ -7,10 +7,10 @@ const char* mqtt_server_ip = "192.168.1.10"; // Raspberry Pi IP
 const int mqtt_port = 1883;
 
 // Unique Register Assignment (CHANGE THIS FOR EACH UNIT)
-const int ASSIGNED_REGISTER = 40008;
+const int ASSIGNED_REGISTER = 40004;
 
 // Static IP Settings (CHANGE THIS FOR EACH UNIT)
-IPAddress local_IP(192, 168, 1, 108); 
+IPAddress local_IP(192, 168, 1, 104); 
 IPAddress gateway(192, 168, 1, 1);    
 IPAddress subnet(255, 255, 255, 0);   
 IPAddress primaryDNS(8, 8, 8, 8);
@@ -18,8 +18,8 @@ IPAddress secondaryDNS(8, 8, 4, 4);
 
 // --- CURRENT SENSOR CALIBRATION ---
 const float ADC_REF_VOLT = 3.3;
-const float SENSITIVITY_1 = 0.146; 
-const float SENSITIVITY_2 = 0.146; 
+const float SENSITIVITY_1 = 0.105; 
+const float SENSITIVITY_2 = 0.105; 
 const float ZERO_VOLT_1  = 2.40; 
 const float ZERO_VOLT_2  = 2.4; 
 const float ALPHA        = 0.15;  
@@ -172,6 +172,9 @@ void checkCurrentSensors() {
     lastCurrentState1 = currentState1;
     client.publish(current1_topic, currentState1, true);
   }
+  Serial.println("Voltage 1:");
+  Serial.println(voltage1);
+
 
   // --- SENSOR 2 ---
   long totalADC2 = 0;
@@ -191,6 +194,20 @@ void checkCurrentSensors() {
     lastCurrentState2 = currentState2;
     client.publish(current2_topic, currentState2, true);
   }
+
+  Serial.println("Voltage 2:");
+  Serial.println(voltage2);
+  
+    // Serial.print("Voltage_1: ");
+    // Serial.print(voltage1, 3);
+    // Serial.println(" V");
+
+    
+    // Serial.print("_____Voltage_2: ");
+    // Serial.print(voltage2, 3);
+    // Serial.println(" V");
+
+
 }
 
 void checkPowerMonitor() {
