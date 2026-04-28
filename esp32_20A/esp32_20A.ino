@@ -1,28 +1,43 @@
 #include <ETH.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <ArduinoJson.h>  // <-- Added
+#include <IPAddress.h>  // <-- Added
+#include <Preferences.h>   // <-- Added
+
 
 // --- USER CONFIGURATION ----------------------------------------
 const char* mqtt_server_ip = "192.168.1.10"; // Raspberry Pi IP
 const int mqtt_port = 1883;
 
 // Unique Register Assignment (CHANGE THIS FOR EACH UNIT)
-const int ASSIGNED_REGISTER = 40004;
+int ASSIGNED_REGISTER = 40001;
 
 // Static IP Settings (CHANGE THIS FOR EACH UNIT)
-IPAddress local_IP(192, 168, 1, 104); 
+IPAddress local_IP(192, 168, 1, 101); 
 IPAddress gateway(192, 168, 1, 1);    
 IPAddress subnet(255, 255, 255, 0);   
 IPAddress primaryDNS(8, 8, 8, 8);
 IPAddress secondaryDNS(8, 8, 4, 4);
 
 // --- CURRENT SENSOR CALIBRATION ---
-const float ADC_REF_VOLT = 3.3;
-const float SENSITIVITY_1 = 0.105; 
-const float SENSITIVITY_2 = 0.105; 
+const float ADC_REF_VOLT = 3.3; 
+float SENSITIVITY_1 = 0.105;
+float SENSITIVITY_2 = 0.105;
 const float ZERO_VOLT_1  = 2.40; 
 const float ZERO_VOLT_2  = 2.4; 
 const float ALPHA        = 0.15;  
+
+// New variable added by mydev_Rak.
+int Route = 0;
+int panel_location = 0;
+String panel_discription = "";
+float battery_calibration = 0.0;
+// Preferences object to save/load settings
+Preferences prefs;
+// other display vars.
+unsigned long lastPrintTime = 0;
+const unsigned long printInterval = 5000; // milliseconds
 
 const float CURRENT_THRESHOLD_1 = 0.100;
 const float CURRENT_THRESHOLD_2 = 0.120;
@@ -69,6 +84,62 @@ const char* lastCurrentState1 = "---";
 const char* lastCurrentState2 = "---";
 unsigned long lastCurrentReadTime = 0;
 const long CURRENT_READ_INTERVAL = 500; 
+
+// ========== Function to update Assigned reg wrt the panel location. ==========
+void updateRegisterFromPanel() {
+  ASSIGNED_REGISTER = 40000 + panel_location;
+}
+
+// ========== Helper: Update IP from string ==========
+void setIPAddress(IPAddress& ip, const char* ipStr) {
+  byte parts[4] = {0,0,0,0};
+  int i = 0;
+  char* token = strtok((char*)ipStr, ".");
+  while (token != NULL && i < 4) {
+    parts[i++] = atoi(token);
+    token = strtok(NULL, ".");
+  }
+  if (i == 4) {
+    ip = IPAddress(parts[0], parts[1], parts[2], parts[3]);
+  }
+}
+
+// ========== Load saved configuration from flash ==========
+void loadConfig() {
+  prefs.begin("my-config", true); // read-only
+  
+  Route            = prefs.getInt("Route", 0);
+  panel_location   = prefs.getInt("Panel", 0);
+  panel_discription = prefs.getString("Desc", "");
+  battery_calibration = prefs.getFloat("BattCal", 0.0f);
+  SENSITIVITY_1    = prefs.getFloat("Sens1", 0.105f);
+  SENSITIVITY_2    = prefs.getFloat("Sens2", 0.105f);
+  
+  String ipStr = prefs.getString("IP", "192.168.1.104");
+  setIPAddress(local_IP, ipStr.c_str());
+  
+  prefs.end();
+  
+  Serial.println("Configuration loaded from flash.");
+}
+
+// ========== Save current configuration to flash ==========
+void saveConfig() {
+  prefs.begin("my-config", false); // read-write
+  
+  prefs.putInt("Route", Route);
+  prefs.putInt("Panel", panel_location);
+  prefs.putString("Desc", panel_discription);
+  prefs.putFloat("BattCal", battery_calibration);
+  prefs.putFloat("Sens1", SENSITIVITY_1);
+  prefs.putFloat("Sens2", SENSITIVITY_2);
+  prefs.putString("IP", local_IP.toString());
+  
+  prefs.end();
+  
+  Serial.println("Configuration saved to flash.");
+}
+
 
 // Updated Event Handler for modern Arduino IDE compatibility
 void eth_event_handler(arduino_event_id_t event) {
@@ -172,8 +243,8 @@ void checkCurrentSensors() {
     lastCurrentState1 = currentState1;
     client.publish(current1_topic, currentState1, true);
   }
-  Serial.println("Voltage 1:");
-  Serial.println(voltage1);
+  // Serial.println("Voltage 1:");
+  // Serial.println(voltage1);
 
 
   // --- SENSOR 2 ---
@@ -195,8 +266,8 @@ void checkCurrentSensors() {
     client.publish(current2_topic, currentState2, true);
   }
 
-  Serial.println("Voltage 2:");
-  Serial.println(voltage2);
+  // Serial.println("Voltage 2:");
+  // Serial.println(voltage2);
   
     // Serial.print("Voltage_1: ");
     // Serial.print(voltage1, 3);
@@ -250,7 +321,11 @@ boolean mqtt_connect() {
 
 void setup() {
   Serial.begin(115200);
-  delay(100);
+  delay(500);
+
+  // while (!Serial); // wait for serial monitor (optional) // <-- Added
+  loadConfig(); // <-- Added
+  updateRegisterFromPanel(); // <-- Added
 
   pinMode(RELAY_1_PIN, OUTPUT);
   pinMode(RELAY_2_PIN, OUTPUT);
@@ -271,7 +346,8 @@ void setup() {
   sprintf(current2_topic, "metro/signage/register/%d/current2", ASSIGNED_REGISTER);
 
   Serial.printf("\n--- ESP32 Ethernet Signage Controller (%d) ---\n", ASSIGNED_REGISTER);
-  
+  Serial.println("ESP32 ready. Waiting for serial configuration..."); // <-- Added
+
   WiFi.onEvent(eth_event_handler);
   
   // Standard Arduino IDE Ethernet Initialization (ESP32 Core v3.x Argument Order)
@@ -303,4 +379,61 @@ void loop() {
     checkPowerMonitor();
     checkCurrentSensors();
   }
+
+  if (Serial.available()) {
+    String jsonLine = Serial.readStringUntil('\n');
+    jsonLine.trim();
+    
+    if (jsonLine.length() > 0) {
+      DynamicJsonDocument doc(256);
+      DeserializationError err = deserializeJson(doc, jsonLine);
+      
+      if (!err) {
+        // Update variables from JSON
+        if (doc.containsKey("Route")) Route = doc["Route"];
+        if (doc.containsKey("PanelLocation")) {
+          panel_location = doc["PanelLocation"];
+          updateRegisterFromPanel(); // <-- Added
+        }
+        if (doc.containsKey("Description")) panel_discription = doc["Description"].as<String>();
+        if (doc.containsKey("IPAddress")) {
+          setIPAddress(local_IP, doc["IPAddress"]);
+        }
+        if (doc.containsKey("ACS_Sensitivity1")) SENSITIVITY_1 = doc["ACS_Sensitivity1"];
+        if (doc.containsKey("ACS_Sensitivity2")) SENSITIVITY_2 = doc["ACS_Sensitivity2"];
+        if (doc.containsKey("Battery_Calibration")) battery_calibration = doc["Battery_Calibration"];
+
+        // Save the new configuration to flash immediately
+        saveConfig();
+        ESP.restart();
+
+        // Send acknowledgment
+        Serial.println("Variables updated successfully.");
+        Serial.print("Route: "); Serial.println(Route);
+        Serial.print("Panel: "); Serial.println(panel_location);
+        Serial.print("IP: "); Serial.println(local_IP);
+        // ... print others as needed
+      } else {
+        Serial.print("JSON parse error: ");
+        Serial.println(err.c_str());
+      }
+    }
+  }
+
+  // ---- Your existing loop code (uses the updated variables) ----
+  // e.g., sensor readings, network communication, etc.
+
+   if (millis() - lastPrintTime >= printInterval) {
+    lastPrintTime = millis();
+    Serial.println("===== Current Configuration =====");
+    Serial.print("Route: "); Serial.println(Route);
+    Serial.print("Panel Location: "); Serial.println(panel_location);
+    Serial.print("Description: "); Serial.println(panel_discription);
+    Serial.print("IP Address: "); Serial.println(local_IP);
+    Serial.print("Battery Calibration: "); Serial.println(battery_calibration, 3);
+    Serial.print("Sensitivity 1: "); Serial.println(SENSITIVITY_1, 3);
+    Serial.print("Sensitivity 2: "); Serial.println(SENSITIVITY_2, 3);
+    Serial.println("=================================");
+  }
+
 }
