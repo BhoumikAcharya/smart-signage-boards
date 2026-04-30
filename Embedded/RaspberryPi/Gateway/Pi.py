@@ -17,6 +17,7 @@ device_statuses = {}       # Stores ONLINE/OFFLINE
 device_power_states = {}   # Stores Power Supply Status (OK/FAIL)
 device_current1 = {}       # Stores Load 1 Status (OK/PARTIAL/FAIL)
 device_current2 = {}       # Stores Load 2 Status (OK/PARTIAL/FAIL)
+device_batt_pct = {}       # NEW: Stores Battery Percentage (100, 50, 0)
 
 # Thread safety lock for the dictionaries
 data_lock = Lock()
@@ -39,6 +40,7 @@ def on_message(client, userdata, msg):
                         device_power_states[register_address] = "---"
                         device_current1[register_address] = "---"
                         device_current2[register_address] = "---"
+                        device_batt_pct[register_address] = "---"
                 
                 elif msg_type == "power":
                     device_power_states[register_address] = payload
@@ -48,6 +50,9 @@ def on_message(client, userdata, msg):
                 
                 elif msg_type == "current2":
                     device_current2[register_address] = payload
+                
+                elif msg_type == "battery_pct":
+                    device_batt_pct[register_address] = payload
 
     except Exception as e:
         pass # Silently drop malformed MQTT packets so the bridge doesn't crash
@@ -58,6 +63,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe(f"{MQTT_TOPIC_PREFIX}/+/power")
         client.subscribe(f"{MQTT_TOPIC_PREFIX}/+/current1")
         client.subscribe(f"{MQTT_TOPIC_PREFIX}/+/current2")
+        client.subscribe(f"{MQTT_TOPIC_PREFIX}/+/battery_pct")
         mqtt_connected_event.set()  # Signal successful connection
 
 def perform_startup_cleanup(client):
@@ -67,18 +73,21 @@ def perform_startup_cleanup(client):
         client.publish(f"{MQTT_TOPIC_PREFIX}/{addr}/power", "---", retain=True)
         client.publish(f"{MQTT_TOPIC_PREFIX}/{addr}/current1", "---", retain=True)
         client.publish(f"{MQTT_TOPIC_PREFIX}/{addr}/current2", "---", retain=True)
+        client.publish(f"{MQTT_TOPIC_PREFIX}/{addr}/battery_pct", "---", retain=True)
         
         with data_lock:
             device_statuses[addr] = "OFFLINE"
             device_power_states[addr] = "---"
             device_current1[addr] = "---"
             device_current2[addr] = "---"
+            device_batt_pct[addr] = "---"
         
     client.publish("metro/signage/scan", "PING", retain=False)
     time.sleep(2)
 
 def bridge_and_display_loop(modbus_context, mqtt_client):
     last_known_values = [None] * REGISTERS_TO_BRIDGE
+    last_ping_time = time.time() # NEW: Track the last ping time
 
     # Clear the screen entirely just ONCE before the loop starts
     if sys.stdout.isatty():
@@ -86,6 +95,11 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
 
     while True:
         try:
+            # NEW: Broadcast a PING every 60 seconds to reset ESP32 Fail-Safe timers
+            if time.time() - last_ping_time > 60:
+                mqtt_client.publish("metro/signage/scan", "PING", retain=False)
+                last_ping_time = time.time()
+
             # --- MUX LOGIC (Hand/Off/Auto) ---
             # Read Control Flag (43001 -> Address 3000)
             mux_flag = modbus_context[0].getValues(3, 3000, count=1)[0]
@@ -122,9 +136,9 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                 mode_text = "HMI (MANUAL)" if mux_flag == 1 else "SCADA (AUTO)"
                 frame += f"CURRENT MUX MODE: {mode_text} (Flag 43001: {mux_flag})\n"
                 
-                frame += "+------------+---------+----------+-----------------+----------+----------+----------+\n"
-                frame += "| Register   |  Value  |  Status  |   IP Address    |  Power   | Load 1   | Load 2   |\n"
-                frame += "+------------+---------+----------+-----------------+----------+----------+----------+\n"
+                frame += "+------------+---------+----------+-----------------+----------+----------+----------+--------+\n"
+                frame += "| Register   |  Value  |  Status  |   IP Address    |  Power   | Load 1   | Load 2   | Batt % |\n"
+                frame += "+------------+---------+----------+-----------------+----------+----------+----------+--------+\n"
                 
                 # Only display the first 15 in terminal so it doesn't overflow, but process all 100 for SCADA
                 display_limit = min(REGISTERS_TO_BRIDGE, 15) 
@@ -138,6 +152,7 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                         power_text = device_power_states.get(addr, "---")
                         c1_text = device_current1.get(addr, "---")
                         c2_text = device_current2.get(addr, "---")
+                        batt_text = device_batt_pct.get(addr, "---")
 
                     # --- SCADA MODBUS TRANSLATION BLOCK ---
                     # 1. Status: 1 = Online, 0 = Offline
@@ -151,11 +166,20 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                         
                     # 4. Current 2: 1 = OK, 0 = Fail
                     modbus_c2 = 1 if c2_text == "OK" else 0
+                    
+                    # 5. Battery Percentage
+                    try:
+                        modbus_batt = int(batt_text)
+                    except ValueError:
+                        modbus_batt = 0
+                        
+                    # 6. Reserved Buffer Register (For Future Use)
+                    modbus_buffer = 0
 
-                    # Write the 4 diagnostic registers to Address 5000+ (Register 45001+)
-                    # Node i starts at index 5000 + (i * 4)
-                    diagnostic_base_index = 5000 + (i * 4) 
-                    modbus_context[0].setValues(3, diagnostic_base_index, [modbus_status, modbus_power, modbus_c1, modbus_c2])
+                    # Write the 6 diagnostic registers to Address 5000+ (Register 45001+)
+                    # Node i starts at index 5000 + (i * 6)
+                    diagnostic_base_index = 5000 + (i * 6) 
+                    modbus_context[0].setValues(3, diagnostic_base_index, [modbus_status, modbus_power, modbus_c1, modbus_c2, modbus_batt, modbus_buffer])
                     # ----------------------------------------
 
                     # Draw to terminal only if under the display limit
@@ -170,14 +194,16 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
                         else:
                             status_text = raw_status
                             ip_text = "---"
+                            
+                        batt_display = f"{batt_text}%" if batt_text != "---" else "---"
 
-                        frame += f"| {addr:<10} | {val:>7} | {status_text:<8} | {ip_text:<15} | {power_text:<8} | {c1_text:<8} | {c2_text:<8} |\n"
+                        frame += f"| {addr:<10} | {val:>7} | {status_text:<8} | {ip_text:<15} | {power_text:<8} | {c1_text:<8} | {c2_text:<8} | {batt_display:>6} |\n"
                 
                 if REGISTERS_TO_BRIDGE > display_limit:
-                    frame += f"| ...        | ...     | ...      | ...             | ...      | ...      | ...      |\n"
-                    frame += f"| (Displaying {display_limit} of {REGISTERS_TO_BRIDGE} nodes. All {REGISTERS_TO_BRIDGE} mapping to SCADA background) |\n"
+                    frame += f"| ...        | ...     | ...      | ...             | ...      | ...      | ...      | ...    |\n"
+                    frame += f"| (Displaying {display_limit} of {REGISTERS_TO_BRIDGE} nodes. All {REGISTERS_TO_BRIDGE} mapping 6 registers/node to SCADA)                   |\n"
 
-                frame += "+------------+---------+----------+-----------------+----------+----------+----------+\n"
+                frame += "+------------+---------+----------+-----------------+----------+----------+----------+--------+\n"
                 frame += "Monitoring... Press Ctrl+C to stop.\n"
                 
                 # Clear to end of screen to remove any ghosting
@@ -198,7 +224,7 @@ def bridge_and_display_loop(modbus_context, mqtt_client):
 if __name__ == '__main__':
     mqtt_client = None
     try:
-        # Expanded Modbus memory block to 6000 to cover Addresses up to 45500+ for SCADA Diagnostics
+        # Expanded Modbus memory block to 6000 to cover Addresses up to 45600+ for SCADA Diagnostics
         store = ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0] * 6000))
         context = ModbusServerContext(slaves=store, single=True)
 
