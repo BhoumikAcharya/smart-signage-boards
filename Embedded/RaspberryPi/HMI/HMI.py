@@ -206,18 +206,18 @@ class DashboardFrame(tk.Frame):
         self.lbl_page_info = tk.Label(bottom_bar, text="1 - 8 / 100", font=self.controller.font_mono, bg=COLORS["bg_main"], fg=COLORS["text_dim"])
         self.lbl_page_info.pack(side="right", padx=24)
         
-        # Pagination Buttons
+        # Pagination Buttons - Increased ipadx and ipady significantly to make touch targets larger
         self.btn_next = tk.Button(bottom_bar, text="NEXT PAGE ➔", font=self.controller.font_body,
                                   bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
                                   activebackground=COLORS["bg_hover"], activeforeground=COLORS["primary"],
                                   command=self.next_page)
-        self.btn_next.pack(side="left", padx=(24, 10), pady=10, ipadx=10, ipady=5)
+        self.btn_next.pack(side="left", padx=(24, 10), pady=10, ipadx=20, ipady=15)
 
         self.btn_prev = tk.Button(bottom_bar, text="🡨 PREV PAGE", font=self.controller.font_body,
                                   bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
                                   activebackground=COLORS["bg_hover"], activeforeground=COLORS["primary"],
                                   command=self.prev_page, state="disabled")
-        self.btn_prev.pack(side="left", padx=10, pady=10, ipadx=10, ipady=5)
+        self.btn_prev.pack(side="left", padx=10, pady=10, ipadx=20, ipady=15)
 
     def open_keyboard(self, event):
         # Open the custom touch keyboard
