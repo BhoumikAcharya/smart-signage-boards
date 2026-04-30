@@ -124,6 +124,7 @@ class HMIApp(tk.Tk):
         self.font_h2 = font.Font(family="Helvetica", size=20, weight="bold")
         self.font_body = font.Font(family="Helvetica", size=14)
         self.font_mono = font.Font(family="Courier", size=14, weight="bold")
+        self.font_large = font.Font(family="Helvetica", size=36, weight="bold")
         
         # Container to hold all frames
         self.container = tk.Frame(self, bg=COLORS["bg_main"])
@@ -198,7 +199,7 @@ class DashboardFrame(tk.Frame):
         self.rows_container.pack(fill="both", expand=True, padx=24, pady=8)
         
         # --- BOTTOM BAR (PAGINATION) ---
-        bottom_bar = tk.Frame(self, bg=COLORS["bg_main"], height=80)
+        bottom_bar = tk.Frame(self, bg=COLORS["bg_main"], height=90) # Increased height to ensure buttons fit comfortably
         bottom_bar.pack(fill="x", side="bottom")
         bottom_bar.pack_propagate(False)
         
@@ -206,18 +207,20 @@ class DashboardFrame(tk.Frame):
         self.lbl_page_info = tk.Label(bottom_bar, text="1 - 8 / 100", font=self.controller.font_mono, bg=COLORS["bg_main"], fg=COLORS["text_dim"])
         self.lbl_page_info.pack(side="right", padx=24)
         
-        # Pagination Buttons - Increased ipadx and ipady significantly to make touch targets larger
+        # Pagination Buttons - Changed from ipadx/ipady to explicit width/height in character units
         self.btn_next = tk.Button(bottom_bar, text="NEXT PAGE ➔", font=self.controller.font_body,
                                   bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
                                   activebackground=COLORS["bg_hover"], activeforeground=COLORS["primary"],
+                                  width=14, height=2,
                                   command=self.next_page)
-        self.btn_next.pack(side="left", padx=(24, 10), pady=10, ipadx=20, ipady=15)
+        self.btn_next.pack(side="left", padx=(24, 10), pady=10)
 
         self.btn_prev = tk.Button(bottom_bar, text="🡨 PREV PAGE", font=self.controller.font_body,
                                   bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
                                   activebackground=COLORS["bg_hover"], activeforeground=COLORS["primary"],
+                                  width=14, height=2,
                                   command=self.prev_page, state="disabled")
-        self.btn_prev.pack(side="left", padx=10, pady=10, ipadx=20, ipady=15)
+        self.btn_prev.pack(side="left", padx=10, pady=10)
 
     def open_keyboard(self, event):
         # Open the custom touch keyboard
@@ -262,7 +265,10 @@ class DashboardFrame(tk.Frame):
         
         # Update Pagination Info
         total = len(self.filtered_nodes)
-        self.lbl_page_info.config(text=f"{start_idx + 1} - {end_idx} / {total}")
+        if total == 0:
+            self.lbl_page_info.config(text="0 - 0 / 0")
+        else:
+            self.lbl_page_info.config(text=f"{start_idx + 1} - {end_idx} / {total}")
         
         # Update Button States
         self.btn_prev.config(state="normal" if self.current_page > 0 else "disabled")
@@ -304,7 +310,16 @@ class NodeDetailFrame(tk.Frame):
         super().__init__(parent, bg=COLORS["bg_main"])
         self.controller = controller
         
-        # Header
+        # State variables for UI simulation (Will be replaced by Modbus data later)
+        self.mux_manual = False
+        self.r1_on = False
+        self.r2_on = False
+        self.current_node_id = None
+        
+        self.setup_ui()
+
+    def setup_ui(self):
+        # --- HEADER ---
         self.header_var = tk.StringVar(value="NODE DETAILS")
         top_bar = tk.Frame(self, bg=COLORS["bg_lowest"], height=64)
         top_bar.pack(fill="x", side="top")
@@ -319,21 +334,138 @@ class NodeDetailFrame(tk.Frame):
         tk.Label(top_bar, textvariable=self.header_var, font=self.controller.font_h2, 
                  bg=COLORS["bg_lowest"], fg=COLORS["primary"]).pack(side="left", padx=24)
                  
-        # Specific Diagnostics Button
         btn_diag = tk.Button(top_bar, text="NODE DIAGNOSTICS ⚙", font=self.controller.font_body,
                              bg=COLORS["bg_panel"], fg=COLORS["alert"], relief="flat",
                              activebackground=COLORS["bg_hover"])
         btn_diag.pack(side="right", padx=24, pady=10)
 
-        # Placeholder Body
-        self.lbl_info = tk.Label(self, text="Loading Node Data...", font=self.controller.font_h2, 
-                                 bg=COLORS["bg_main"], fg=COLORS["text_main"])
-        self.lbl_info.pack(expand=True)
+        # --- CONTENT AREA (TWO COLUMNS) ---
+        content_frame = tk.Frame(self, bg=COLORS["bg_main"])
+        content_frame.pack(fill="both", expand=True, padx=24, pady=24)
+        
+        # LEFT COLUMN: TELEMETRY
+        self.left_col = tk.Frame(content_frame, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
+        self.left_col.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        
+        # RIGHT COLUMN: OVERRIDE CONTROLS
+        self.right_col = tk.Frame(content_frame, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
+        self.right_col.pack(side="right", fill="both", expand=True, padx=(12, 0))
+
+        self.setup_telemetry_panel()
+        self.setup_control_panel()
+
+    def setup_telemetry_panel(self):
+        tk.Label(self.left_col, text="HARDWARE TELEMETRY", font=self.controller.font_body, 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(anchor="w", padx=20, pady=(20, 10))
+        
+        # Status Rows
+        self.lbl_pwr, self.led_pwr = self.create_status_row(self.left_col, "Main Power Supply", "OK", COLORS["success"])
+        self.lbl_l1, self.led_l1 = self.create_status_row(self.left_col, "Load 1 Current Sensor", "OK", COLORS["success"])
+        self.lbl_l2, self.led_l2 = self.create_status_row(self.left_col, "Load 2 Current Sensor", "OK", COLORS["success"])
+        
+        # Battery Indicator
+        batt_container = tk.Frame(self.left_col, bg=COLORS["bg_panel"])
+        batt_container.pack(fill="x", padx=20, pady=30)
+        
+        tk.Label(batt_container, text="Backup Battery:", font=self.controller.font_body, 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(side="left")
+                 
+        self.lbl_batt = tk.Label(batt_container, text="100%", font=self.controller.font_large, 
+                                 bg=COLORS["bg_panel"], fg=COLORS["success"])
+        self.lbl_batt.pack(side="right", padx=10)
+
+    def create_status_row(self, parent, label_text, status_text, color):
+        row = tk.Frame(parent, bg=COLORS["bg_lowest"], height=56)
+        row.pack(fill="x", padx=20, pady=6)
+        row.pack_propagate(False)
+        
+        tk.Label(row, text=label_text, font=self.controller.font_body, 
+                 bg=COLORS["bg_lowest"], fg=COLORS["text_main"]).pack(side="left", padx=16)
+                 
+        lbl = tk.Label(row, text=status_text, font=self.controller.font_mono, 
+                       bg=COLORS["bg_lowest"], fg=color)
+        lbl.pack(side="right", padx=(10, 16))
+        
+        led = tk.Canvas(row, width=16, height=16, bg=COLORS["bg_lowest"], highlightthickness=0)
+        led.create_oval(2, 2, 14, 14, fill=color, outline="")
+        led.pack(side="right", pady=20) # Vertically centered
+        
+        return lbl, led
+
+    def setup_control_panel(self):
+        tk.Label(self.right_col, text="MANUAL OVERRIDE CONTROL", font=self.controller.font_body, 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(anchor="w", padx=20, pady=(20, 10))
+        
+        # MUX Toggle Button
+        self.btn_mux = tk.Button(self.right_col, text="MODE: SCADA (AUTO)", font=self.controller.font_body,
+                                 bg=COLORS["bg_lowest"], fg=COLORS["text_main"], relief="flat",
+                                 activebackground=COLORS["bg_hover"],
+                                 width=25, height=2, command=self.toggle_mux)
+        self.btn_mux.pack(pady=(10, 30))
+        
+        # Relay 1 Button
+        self.btn_r1 = tk.Button(self.right_col, text="RELAY 1: OFF", font=self.controller.font_h2,
+                                bg=COLORS["bg_lowest"], fg=COLORS["border"], relief="flat",
+                                width=15, height=2, state="disabled", command=lambda: self.toggle_relay(1))
+        self.btn_r1.pack(pady=10)
+        
+        # Relay 2 Button
+        self.btn_r2 = tk.Button(self.right_col, text="RELAY 2: OFF", font=self.controller.font_h2,
+                                bg=COLORS["bg_lowest"], fg=COLORS["border"], relief="flat",
+                                width=15, height=2, state="disabled", command=lambda: self.toggle_relay(2))
+        self.btn_r2.pack(pady=10)
+
+    # --- UI SIMULATION LOGIC ---
+    def toggle_mux(self):
+        self.mux_manual = not self.mux_manual
+        if self.mux_manual:
+            self.btn_mux.config(text="MODE: HMI (MANUAL)", bg=COLORS["alert"], fg=COLORS["bg_lowest"], activebackground=COLORS["alert"])
+            self.update_relay_buttons()
+        else:
+            self.btn_mux.config(text="MODE: SCADA (AUTO)", bg=COLORS["bg_lowest"], fg=COLORS["text_main"], activebackground=COLORS["bg_hover"])
+            # Lock relays and grey them out
+            self.btn_r1.config(state="disabled", bg=COLORS["bg_lowest"], fg=COLORS["border"])
+            self.btn_r2.config(state="disabled", bg=COLORS["bg_lowest"], fg=COLORS["border"])
+
+    def toggle_relay(self, relay_num):
+        if relay_num == 1:
+            self.r1_on = not self.r1_on
+        else:
+            self.r2_on = not self.r2_on
+        self.update_relay_buttons()
+
+    def update_relay_buttons(self):
+        if not self.mux_manual:
+            return # Don't update if locked
+            
+        if self.r1_on:
+            self.btn_r1.config(state="normal", text="RELAY 1: ON", bg=COLORS["primary"], fg=COLORS["bg_lowest"], activebackground=COLORS["primary"])
+        else:
+            self.btn_r1.config(state="normal", text="RELAY 1: OFF", bg=COLORS["bg_hover"], fg=COLORS["text_main"], activebackground=COLORS["bg_panel"])
+            
+        if self.r2_on:
+            self.btn_r2.config(state="normal", text="RELAY 2: ON", bg=COLORS["primary"], fg=COLORS["bg_lowest"], activebackground=COLORS["primary"])
+        else:
+            self.btn_r2.config(state="normal", text="RELAY 2: OFF", bg=COLORS["bg_hover"], fg=COLORS["text_main"], activebackground=COLORS["bg_panel"])
 
     def load_node_data(self, node_data):
         """Called when switching to this screen to update the specific node info."""
-        self.header_var.set(f"NODE DETAILS: {node_data['id']}")
-        self.lbl_info.config(text=f"Selected Node: {node_data['id']}\nIP: {node_data['ip']}\nStatus: {node_data['status']}\n\n(Relay Controls and Battery Math will go here)")
+        self.current_node_id = node_data['id']
+        self.header_var.set(f"NODE DETAILS: {self.current_node_id}")
+        
+        # --- Mock Data Loading ---
+        # Simulate battery percentage based on mock status
+        batt_pct = "100%" if node_data['status'] == "ONLINE" else "0%" if node_data['status'] == "OFFLINE" else "50%"
+        batt_color = COLORS["success"] if batt_pct == "100%" else COLORS["error"] if batt_pct == "0%" else COLORS["alert"]
+        self.lbl_batt.config(text=batt_pct, fg=batt_color)
+        
+        # Force a reset of the UI state to SCADA mode whenever we open a new node
+        self.mux_manual = False
+        self.r1_on = False
+        self.r2_on = False
+        self.btn_mux.config(text="MODE: SCADA (AUTO)", bg=COLORS["bg_lowest"], fg=COLORS["text_main"])
+        self.btn_r1.config(state="disabled", text="RELAY 1: OFF", bg=COLORS["bg_lowest"], fg=COLORS["border"])
+        self.btn_r2.config(state="disabled", text="RELAY 2: OFF", bg=COLORS["bg_lowest"], fg=COLORS["border"])
 
 
 if __name__ == "__main__":
