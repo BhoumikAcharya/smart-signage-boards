@@ -310,124 +310,219 @@ class NodeDetailFrame(tk.Frame):
         super().__init__(parent, bg=COLORS["bg_main"])
         self.controller = controller
         
-        # State variables for UI simulation (Will be replaced by Modbus data later)
         self.mux_manual = False
         self.r1_on = False
         self.r2_on = False
-        self.current_node_id = None
+        self.current_node_id = "ND-XXXX"
         
         self.setup_ui()
 
     def setup_ui(self):
         # --- HEADER ---
-        self.header_var = tk.StringVar(value="NODE DETAILS")
+        self.header_var = tk.StringVar(value="ND-XXXX")
         top_bar = tk.Frame(self, bg=COLORS["bg_lowest"], height=64)
         top_bar.pack(fill="x", side="top")
         top_bar.pack_propagate(False)
         
-        btn_back = tk.Button(top_bar, text="🡨 BACK", font=self.controller.font_body,
-                             bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
-                             activebackground=COLORS["bg_hover"],
-                             command=lambda: self.controller.show_frame("Dashboard"))
-        btn_back.pack(side="left", padx=24, pady=10)
+        # Back button (Minimalist text link matching image)
+        lbl_back = tk.Label(top_bar, text="← BACK", font=("Helvetica", 12, "bold"),
+                            bg=COLORS["bg_lowest"], fg=COLORS["primary"], cursor="hand2")
+        lbl_back.pack(side="left", padx=24)
+        lbl_back.bind("<Button-1>", lambda e: self.controller.show_frame("Dashboard"))
         
-        tk.Label(top_bar, textvariable=self.header_var, font=self.controller.font_h2, 
-                 bg=COLORS["bg_lowest"], fg=COLORS["primary"]).pack(side="left", padx=24)
+        # Center Title
+        tk.Label(top_bar, textvariable=self.header_var, font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_lowest"], fg=COLORS["primary"]).pack(side="left", expand=True)
                  
-        btn_diag = tk.Button(top_bar, text="NODE DIAGNOSTICS ⚙", font=self.controller.font_body,
-                             bg=COLORS["bg_panel"], fg=COLORS["alert"], relief="flat",
-                             activebackground=COLORS["bg_hover"])
-        btn_diag.pack(side="right", padx=24, pady=10)
+        # Diagnostics
+        lbl_diag = tk.Label(top_bar, text="diagnostics ⚙", font=("Helvetica", 12, "bold"),
+                            bg=COLORS["bg_lowest"], fg=COLORS["primary"], cursor="hand2")
+        lbl_diag.pack(side="right", padx=24)
 
-        # --- CONTENT AREA (TWO COLUMNS) ---
+        # --- CONTENT AREA ---
         content_frame = tk.Frame(self, bg=COLORS["bg_main"])
-        content_frame.pack(fill="both", expand=True, padx=24, pady=24)
+        content_frame.pack(fill="both", expand=True, padx=32, pady=32)
         
-        # LEFT COLUMN: TELEMETRY
-        self.left_col = tk.Frame(content_frame, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
-        self.left_col.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        # LEFT COLUMN: TELEMETRY (Borderless to match image)
+        self.left_col = tk.Frame(content_frame, bg=COLORS["bg_main"])
+        self.left_col.pack(side="left", fill="both", expand=True, padx=(0, 20))
         
-        # RIGHT COLUMN: OVERRIDE CONTROLS
-        self.right_col = tk.Frame(content_frame, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
-        self.right_col.pack(side="right", fill="both", expand=True, padx=(12, 0))
+        # RIGHT COLUMN: OVERRIDE CONTROLS (Borderless to match image)
+        self.right_col = tk.Frame(content_frame, bg=COLORS["bg_main"])
+        self.right_col.pack(side="right", fill="both", expand=True, padx=(20, 0))
 
         self.setup_telemetry_panel()
         self.setup_control_panel()
 
     def setup_telemetry_panel(self):
-        tk.Label(self.left_col, text="HARDWARE TELEMETRY", font=self.controller.font_body, 
-                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(anchor="w", padx=20, pady=(20, 10))
+        # Section Title
+        tk.Label(self.left_col, text="❖ HARDWARE TELEMETRY", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w", pady=(0, 16))
+        
+        # IP Address Row (Custom row without LED)
+        ip_row = tk.Frame(self.left_col, bg=COLORS["bg_panel"], height=52)
+        ip_row.pack(fill="x", pady=4)
+        ip_row.pack_propagate(False)
+        tk.Label(ip_row, text="IP Address", font=("Helvetica", 12), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(side="left", padx=16)
+        self.lbl_ip = tk.Label(ip_row, text="192.168.10.X", font=("Helvetica", 12, "bold"), 
+                               bg=COLORS["bg_panel"], fg=COLORS["primary"])
+        self.lbl_ip.pack(side="right", padx=16)
         
         # Status Rows
+        self.lbl_conn, self.led_conn = self.create_status_row(self.left_col, "Connection Status", "ONLINE", COLORS["success"])
         self.lbl_pwr, self.led_pwr = self.create_status_row(self.left_col, "Main Power Supply", "OK", COLORS["success"])
         self.lbl_l1, self.led_l1 = self.create_status_row(self.left_col, "Load 1 Current Sensor", "OK", COLORS["success"])
         self.lbl_l2, self.led_l2 = self.create_status_row(self.left_col, "Load 2 Current Sensor", "OK", COLORS["success"])
         
-        # Battery Indicator
-        batt_container = tk.Frame(self.left_col, bg=COLORS["bg_panel"])
-        batt_container.pack(fill="x", padx=20, pady=30)
+        # Bottom Battery Area
+        batt_container = tk.Frame(self.left_col, bg=COLORS["bg_main"])
+        batt_container.pack(side="bottom", fill="x", pady=10)
         
-        tk.Label(batt_container, text="Backup Battery:", font=self.controller.font_body, 
-                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(side="left")
+        # Battery Left Stack
+        batt_left = tk.Frame(batt_container, bg=COLORS["bg_main"])
+        batt_left.pack(side="left")
+        
+        tk.Label(batt_left, text="BACKUP BATTERY:", font=("Helvetica", 10, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w")
                  
-        self.lbl_batt = tk.Label(batt_container, text="100%", font=self.controller.font_large, 
-                                 bg=COLORS["bg_panel"], fg=COLORS["success"])
-        self.lbl_batt.pack(side="right", padx=10)
+        val_frame = tk.Frame(batt_left, bg=COLORS["bg_main"])
+        val_frame.pack(anchor="w", pady=4)
+        
+        self.batt_icon = tk.Canvas(val_frame, width=18, height=28, bg=COLORS["bg_main"], highlightthickness=0)
+        self.batt_icon.pack(side="left", padx=(0, 8))
+        self.draw_battery_icon(100, COLORS["success"])
+        
+        self.lbl_batt = tk.Label(val_frame, text="100%", font=("Helvetica", 28, "bold"), 
+                                 bg=COLORS["bg_main"], fg=COLORS["success"])
+        self.lbl_batt.pack(side="left")
+
+    def draw_battery_icon(self, pct, color):
+        self.batt_icon.delete("all")
+        # Terminal
+        self.batt_icon.create_rectangle(5, 0, 13, 3, fill=COLORS["text_dim"], outline="")
+        # Body outline
+        self.batt_icon.create_rectangle(0, 3, 18, 28, fill="", outline=COLORS["text_dim"], width=2)
+        # Dynamic fill
+        fill_h = max(1, int(23 * (pct / 100.0)))
+        self.batt_icon.create_rectangle(2, 26 - fill_h, 16, 26, fill=color, outline="")
 
     def create_status_row(self, parent, label_text, status_text, color):
-        row = tk.Frame(parent, bg=COLORS["bg_lowest"], height=56)
-        row.pack(fill="x", padx=20, pady=6)
+        row = tk.Frame(parent, bg=COLORS["bg_panel"], height=52)
+        row.pack(fill="x", pady=4)
         row.pack_propagate(False)
         
-        tk.Label(row, text=label_text, font=self.controller.font_body, 
-                 bg=COLORS["bg_lowest"], fg=COLORS["text_main"]).pack(side="left", padx=16)
+        tk.Label(row, text=label_text, font=("Helvetica", 12), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(side="left", padx=16)
                  
-        lbl = tk.Label(row, text=status_text, font=self.controller.font_mono, 
-                       bg=COLORS["bg_lowest"], fg=color)
-        lbl.pack(side="right", padx=(10, 16))
+        led = tk.Canvas(row, width=12, height=12, bg=COLORS["bg_panel"], highlightthickness=0)
+        led.create_oval(1, 1, 11, 11, fill=color, outline="")
+        led.pack(side="right", padx=(10, 16), pady=20)
         
-        led = tk.Canvas(row, width=16, height=16, bg=COLORS["bg_lowest"], highlightthickness=0)
-        led.create_oval(2, 2, 14, 14, fill=color, outline="")
-        led.pack(side="right", pady=20) # Vertically centered
+        lbl = tk.Label(row, text=status_text, font=("Helvetica", 10, "bold"), 
+                       bg=COLORS["bg_panel"], fg=color)
+        lbl.pack(side="right")
         
         return lbl, led
 
     def setup_control_panel(self):
-        tk.Label(self.right_col, text="MANUAL OVERRIDE CONTROL", font=self.controller.font_body, 
-                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(anchor="w", padx=20, pady=(20, 10))
+        # Section Title
+        tk.Label(self.right_col, text="≢ MANUAL OVERRIDE CONTROL", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w", pady=(0, 16))
         
-        # MUX Toggle Button
-        self.btn_mux = tk.Button(self.right_col, text="MODE: SCADA (AUTO)", font=self.controller.font_body,
-                                 bg=COLORS["bg_lowest"], fg=COLORS["text_main"], relief="flat",
-                                 activebackground=COLORS["bg_hover"],
-                                 width=25, height=2, command=self.toggle_mux)
-        self.btn_mux.pack(pady=(10, 30))
+        # MUX Mode Box
+        mode_frame = tk.Frame(self.right_col, bg=COLORS["bg_panel"], height=80)
+        mode_frame.pack(fill="x", pady=(0, 16))
+        mode_frame.pack_propagate(False)
         
-        # Relay 1 Button
-        self.btn_r1 = tk.Button(self.right_col, text="RELAY 1: OFF", font=self.controller.font_h2,
-                                bg=COLORS["bg_lowest"], fg=COLORS["border"], relief="flat",
-                                width=15, height=2, state="disabled", command=lambda: self.toggle_relay(1))
-        self.btn_r1.pack(pady=10)
+        mode_text_frame = tk.Frame(mode_frame, bg=COLORS["bg_panel"])
+        mode_text_frame.pack(side="left", padx=20, pady=16, fill="y")
         
-        # Relay 2 Button
-        self.btn_r2 = tk.Button(self.right_col, text="RELAY 2: OFF", font=self.controller.font_h2,
-                                bg=COLORS["bg_lowest"], fg=COLORS["border"], relief="flat",
-                                width=15, height=2, state="disabled", command=lambda: self.toggle_relay(2))
-        self.btn_r2.pack(pady=10)
+        tk.Label(mode_text_frame, text="CURRENT MODE", font=("Helvetica", 10, "bold"), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(anchor="w")
+        self.lbl_mode_val = tk.Label(mode_text_frame, text="SCADA (AUTO)", font=("Helvetica", 16, "bold"), 
+                                     bg=COLORS["bg_panel"], fg=COLORS["primary"])
+        self.lbl_mode_val.pack(anchor="w")
+        
+        # Custom Canvas Toggle Switch
+        self.toggle_canvas = tk.Canvas(mode_frame, width=64, height=32, bg=COLORS["bg_panel"], highlightthickness=0)
+        self.toggle_canvas.pack(side="right", padx=20, pady=24)
+        self.toggle_canvas.bind("<Button-1>", self.toggle_mux)
+        self.draw_toggle(False)
+        
+        # Relay 1 Custom Button
+        self.r1_frame = tk.Frame(self.right_col, bg=COLORS["bg_main"], highlightbackground=COLORS["border"], highlightthickness=1, height=80)
+        self.r1_frame.pack(fill="x", pady=8)
+        self.r1_frame.pack_propagate(False)
+        self.r1_lbl = tk.Label(self.r1_frame, text="RELAY 1: OFF", font=("Helvetica", 14, "bold"), bg=COLORS["bg_main"], fg=COLORS["border"])
+        self.r1_lbl.place(relx=0.5, rely=0.5, anchor="center")
+        self.r1_frame.bind("<Button-1>", lambda e: self.toggle_relay(1))
+        self.r1_lbl.bind("<Button-1>", lambda e: self.toggle_relay(1))
+        
+        # Relay 2 Custom Button
+        self.r2_frame = tk.Frame(self.right_col, bg=COLORS["bg_main"], highlightbackground=COLORS["border"], highlightthickness=1, height=80)
+        self.r2_frame.pack(fill="x", pady=8)
+        self.r2_frame.pack_propagate(False)
+        self.r2_lbl = tk.Label(self.r2_frame, text="RELAY 2: OFF", font=("Helvetica", 14, "bold"), bg=COLORS["bg_main"], fg=COLORS["border"])
+        self.r2_lbl.place(relx=0.5, rely=0.5, anchor="center")
+        self.r2_frame.bind("<Button-1>", lambda e: self.toggle_relay(2))
+        self.r2_lbl.bind("<Button-1>", lambda e: self.toggle_relay(2))
+        
+        # Warning Box
+        self.warn_frame = tk.Frame(self.right_col, bg="#361a00", highlightthickness=0)
+        self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12)
+        
+        warn_left = tk.Frame(self.warn_frame, bg=COLORS["alert"], width=4)
+        warn_left.pack(side="left", fill="y")
+        
+        warn_text = "⚠️  Overrides are locked while in SCADA Auto mode. Engage local physical\nswitch to enable manual HMI control."
+        tk.Label(self.warn_frame, text=warn_text, font=("Helvetica", 10), justify="left", 
+                 bg="#361a00", fg=COLORS["text_dim"]).pack(side="left", padx=16)
 
-    # --- UI SIMULATION LOGIC ---
-    def toggle_mux(self):
+    def draw_toggle(self, is_on):
+        self.toggle_canvas.delete("all")
+        w, h = 64, 32
+        r = h / 2
+        pad = 4
+        
+        if is_on:
+            track_color = COLORS["alert"]
+            knob_x = w - h + pad
+            knob_color = COLORS["bg_main"]
+        else:
+            track_color = "#2a2a2a"
+            knob_x = pad
+            knob_color = COLORS["primary"]
+            
+        # Draw track pill
+        self.toggle_canvas.create_oval(0, 0, h, h, fill=track_color, outline="")
+        self.toggle_canvas.create_oval(w-h, 0, w, h, fill=track_color, outline="")
+        self.toggle_canvas.create_rectangle(r, 0, w-r, h, fill=track_color, outline="")
+        
+        # Draw knob
+        self.toggle_canvas.create_oval(knob_x, pad, knob_x+h-2*pad, h-pad, fill=knob_color, outline="")
+
+    def toggle_mux(self, event=None):
         self.mux_manual = not self.mux_manual
         if self.mux_manual:
-            self.btn_mux.config(text="MODE: HMI (MANUAL)", bg=COLORS["alert"], fg=COLORS["bg_lowest"], activebackground=COLORS["alert"])
+            self.lbl_mode_val.config(text="HMI (MANUAL)", fg=COLORS["alert"])
+            self.draw_toggle(True)
+            self.warn_frame.pack_forget() # Hide warning box
             self.update_relay_buttons()
         else:
-            self.btn_mux.config(text="MODE: SCADA (AUTO)", bg=COLORS["bg_lowest"], fg=COLORS["text_main"], activebackground=COLORS["bg_hover"])
-            # Lock relays and grey them out
-            self.btn_r1.config(state="disabled", bg=COLORS["bg_lowest"], fg=COLORS["border"])
-            self.btn_r2.config(state="disabled", bg=COLORS["bg_lowest"], fg=COLORS["border"])
+            self.lbl_mode_val.config(text="SCADA (AUTO)", fg=COLORS["primary"])
+            self.draw_toggle(False)
+            self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12) # Show warning box
+            # Lock relays visually
+            self.r1_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
+            self.r1_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
+            self.r2_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
+            self.r2_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
 
     def toggle_relay(self, relay_num):
+        if not self.mux_manual:
+            return # Locked out
+
         if relay_num == 1:
             self.r1_on = not self.r1_on
         else:
@@ -436,37 +531,52 @@ class NodeDetailFrame(tk.Frame):
 
     def update_relay_buttons(self):
         if not self.mux_manual:
-            return # Don't update if locked
+            return
             
+        # Relay 1 logic
         if self.r1_on:
-            self.btn_r1.config(state="normal", text="RELAY 1: ON", bg=COLORS["primary"], fg=COLORS["bg_lowest"], activebackground=COLORS["primary"])
+            self.r1_frame.config(bg=COLORS["primary"], highlightbackground=COLORS["primary"])
+            self.r1_lbl.config(text="RELAY 1: ON", fg=COLORS["bg_lowest"], bg=COLORS["primary"])
         else:
-            self.btn_r1.config(state="normal", text="RELAY 1: OFF", bg=COLORS["bg_hover"], fg=COLORS["text_main"], activebackground=COLORS["bg_panel"])
+            self.r1_frame.config(bg=COLORS["bg_panel"], highlightbackground=COLORS["border"])
+            self.r1_lbl.config(text="RELAY 1: OFF", fg=COLORS["text_main"], bg=COLORS["bg_panel"])
             
+        # Relay 2 logic
         if self.r2_on:
-            self.btn_r2.config(state="normal", text="RELAY 2: ON", bg=COLORS["primary"], fg=COLORS["bg_lowest"], activebackground=COLORS["primary"])
+            self.r2_frame.config(bg=COLORS["primary"], highlightbackground=COLORS["primary"])
+            self.r2_lbl.config(text="RELAY 2: ON", fg=COLORS["bg_lowest"], bg=COLORS["primary"])
         else:
-            self.btn_r2.config(state="normal", text="RELAY 2: OFF", bg=COLORS["bg_hover"], fg=COLORS["text_main"], activebackground=COLORS["bg_panel"])
+            self.r2_frame.config(bg=COLORS["bg_panel"], highlightbackground=COLORS["border"])
+            self.r2_lbl.config(text="RELAY 2: OFF", fg=COLORS["text_main"], bg=COLORS["bg_panel"])
 
     def load_node_data(self, node_data):
-        """Called when switching to this screen to update the specific node info."""
         self.current_node_id = node_data['id']
-        self.header_var.set(f"NODE DETAILS: {self.current_node_id}")
+        self.header_var.set(self.current_node_id)
         
-        # --- Mock Data Loading ---
-        # Simulate battery percentage based on mock status
-        batt_pct = "100%" if node_data['status'] == "ONLINE" else "0%" if node_data['status'] == "OFFLINE" else "50%"
-        batt_color = COLORS["success"] if batt_pct == "100%" else COLORS["error"] if batt_pct == "0%" else COLORS["alert"]
-        self.lbl_batt.config(text=batt_pct, fg=batt_color)
+        # Update IP and Connection Status
+        self.lbl_ip.config(text=node_data['ip'])
+        self.lbl_conn.config(text=node_data['status'], fg=node_data['color'])
+        self.led_conn.itemconfig(1, fill=node_data['color'])
         
-        # Force a reset of the UI state to SCADA mode whenever we open a new node
+        # Calculate Mock Battery state
+        batt_pct = 100 if node_data['status'] == "ONLINE" else 0 if node_data['status'] == "OFFLINE" else 50
+        batt_color = COLORS["success"] if batt_pct == 100 else COLORS["error"] if batt_pct == 0 else COLORS["alert"]
+        
+        self.lbl_batt.config(text=f"{batt_pct}%", fg=batt_color)
+        self.draw_battery_icon(batt_pct, batt_color)
+        
+        # Enforce reset to SCADA (Auto) upon entering any new node view
         self.mux_manual = False
         self.r1_on = False
         self.r2_on = False
-        self.btn_mux.config(text="MODE: SCADA (AUTO)", bg=COLORS["bg_lowest"], fg=COLORS["text_main"])
-        self.btn_r1.config(state="disabled", text="RELAY 1: OFF", bg=COLORS["bg_lowest"], fg=COLORS["border"])
-        self.btn_r2.config(state="disabled", text="RELAY 2: OFF", bg=COLORS["bg_lowest"], fg=COLORS["border"])
-
+        self.lbl_mode_val.config(text="SCADA (AUTO)", fg=COLORS["primary"])
+        self.draw_toggle(False)
+        self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12)
+        
+        self.r1_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
+        self.r1_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
+        self.r2_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
+        self.r2_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
 
 if __name__ == "__main__":
     app = HMIApp()
