@@ -45,11 +45,17 @@ class VirtualKeyboard(tk.Toplevel):
         # Remove OS window decorations for a seamless kiosk feel
         self.overrideredirect(True)
         
+        # Build the UI widgets FIRST
+        self.setup_ui()
+        
         # Make the keyboard modal
         self.transient(parent)
-        self.grab_set()
         
-        self.setup_ui()
+        # CRITICAL FIX for Raspberry Pi Linux Window Managers:
+        # Wait until the window is actually drawn on the screen before trying to grab it.
+        self.update_idletasks()
+        self.wait_visibility()
+        self.grab_set()
         
     def setup_ui(self):
         # Keyboard Layout
@@ -150,7 +156,7 @@ class DashboardFrame(tk.Frame):
         super().__init__(parent, bg=COLORS["bg_main"])
         self.controller = controller
         self.current_page = 0
-        self.nodes_per_page = 10
+        self.nodes_per_page = 8  # Changed from 10 to 8 per user request
         self.filtered_nodes = MOCK_NODES.copy()
         
         self.setup_ui()
@@ -197,7 +203,7 @@ class DashboardFrame(tk.Frame):
         bottom_bar.pack_propagate(False)
         
         # Paginator text
-        self.lbl_page_info = tk.Label(bottom_bar, text="1 - 10 / 100", font=self.controller.font_mono, bg=COLORS["bg_main"], fg=COLORS["text_dim"])
+        self.lbl_page_info = tk.Label(bottom_bar, text="1 - 8 / 100", font=self.controller.font_mono, bg=COLORS["bg_main"], fg=COLORS["text_dim"])
         self.lbl_page_info.pack(side="right", padx=24)
         
         # Pagination Buttons
