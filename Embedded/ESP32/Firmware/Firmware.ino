@@ -7,10 +7,10 @@ const char* mqtt_server_ip = "192.168.1.10"; // Raspberry Pi IP
 const int mqtt_port = 1883;
 
 // Unique Register Assignment (CHANGE THIS FOR EACH UNIT)
-const int ASSIGNED_REGISTER = 40008;
+const int ASSIGNED_REGISTER = 40001;
 
 // Static IP Settings (CHANGE THIS FOR EACH UNIT)
-IPAddress local_IP(192, 168, 1, 108); 
+IPAddress local_IP(192, 168, 1, 101); 
 IPAddress gateway(192, 168, 1, 1);    
 IPAddress subnet(255, 255, 255, 0);   
 IPAddress primaryDNS(8, 8, 8, 8);
@@ -18,14 +18,20 @@ IPAddress secondaryDNS(8, 8, 4, 4);
 
 // --- CURRENT SENSOR CALIBRATION ---
 const float ADC_REF_VOLT = 3.3;
-const float SENSITIVITY_1 = 0.146; 
-const float SENSITIVITY_2 = 0.146; 
-const float ZERO_VOLT_1  = 2.40; 
-const float ZERO_VOLT_2  = 2.4; 
+const float SENSITIVITY_1 = 0.173; 
+const float SENSITIVITY_2 = 0.173; 
+const float ZERO_VOLT_1  = 2.36; 
+const float ZERO_VOLT_2  = 2.36; 
 const float ALPHA        = 0.15;  
 
 const float CURRENT_THRESHOLD_1 = 0.100;
 const float CURRENT_THRESHOLD_2 = 0.120;
+
+// --- BATTERY CALIBRATION ---
+const float R1 = 4200.0;  // Updated to 4.2k Ohms
+const float R2 = 1000.0;  // Updated to 1k Ohms
+const float ADC_RESOLUTION = 4095.0; 
+const float K_CALIBRATION = 1.057; // Accurately calculated from 13.13V / 12.42V
 
 // GPIO Pins
 const int RELAY_1_PIN = 4;
@@ -33,6 +39,7 @@ const int RELAY_2_PIN = 13;
 const int POWER_MONITOR_PIN = 34; 
 const int CURRENT_PIN_1 = 35;     
 const int CURRENT_PIN_2 = 36;     
+const int BATTERY_PIN = 32;       // NEW: Battery Pin
 
 // Ethernet PHY Configuration (Standard Arduino IDE)
 #define ETH_PHY_ADDR  1
@@ -48,6 +55,7 @@ char status_topic[50];
 char power_topic[50];
 char current1_topic[50];
 char current2_topic[50];
+char batt_pct_topic[50];          // NEW: Battery Topic
 const char* scan_topic = "metro/signage/scan"; 
 
 WiFiClient ethClient;
@@ -69,6 +77,12 @@ const char* lastCurrentState1 = "---";
 const char* lastCurrentState2 = "---";
 unsigned long lastCurrentReadTime = 0;
 const long CURRENT_READ_INTERVAL = 500; 
+
+// Relay & Battery Monitoring Variables
+int currentRelayState = 0;        // 0=OFF, 1/2=One LED, 3=Both LEDs
+int lastBattPct = -1; 
+unsigned long lastBattReadTime = 0;
+const long BATT_READ_INTERVAL = 5000; // Check battery every 5 seconds
 
 // Updated Event Handler for modern Arduino IDE compatibility
 void eth_event_handler(arduino_event_id_t event) {
@@ -115,6 +129,13 @@ void publish_all_status() {
   client.publish(current1_topic, lastCurrentState1, true);
   client.publish(current2_topic, lastCurrentState2, true);
 
+  // Publish Battery
+  if (lastBattPct != -1) {
+    char pctStr[8];
+    snprintf(pctStr, sizeof(pctStr), "%d", lastBattPct);
+    client.publish(batt_pct_topic, pctStr, true);
+  }
+
   Serial.println(">>> Reported Full Status");
 }
 
@@ -134,6 +155,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   // --- Relay Control Logic ---
   int control_value = atoi(msgBuffer); 
+  currentRelayState = control_value; // Store state globally for battery compensation math
   Serial.printf("Received Relay Command: %d\n", control_value);
 
   switch (control_value) {
@@ -172,6 +194,9 @@ void checkCurrentSensors() {
     lastCurrentState1 = currentState1;
     client.publish(current1_topic, currentState1, true);
   }
+  //-----tesitng code remove later -----
+  Serial.println("Voltage CS1: ");
+  Serial.println(voltage1);
 
   // --- SENSOR 2 ---
   long totalADC2 = 0;
@@ -191,6 +216,58 @@ void checkCurrentSensors() {
     lastCurrentState2 = currentState2;
     client.publish(current2_topic, currentState2, true);
   }
+  //-----tesitng code remove later -----
+  Serial.println("Voltage CS2: ");
+  Serial.println(voltage2);
+}
+
+// --- NEW: INTEGRATED BATTERY MONITOR ---
+void checkBattery() {
+  if (millis() - lastBattReadTime < BATT_READ_INTERVAL) return;
+  lastBattReadTime = millis();
+
+  // 1. Take 100 samples to average out ADC noise
+  long totalADC = 0;
+  for (int i = 0; i < 100; i++) {
+    totalADC += analogRead(BATTERY_PIN);
+  }
+  float avgADC = totalADC / 100.0;
+
+  // 2. Calculate the base battery voltage
+  float pinVoltage = (avgADC / ADC_RESOLUTION) * ADC_REF_VOLT; 
+  float battVoltage = pinVoltage * ((R1 + R2) / R2) * K_CALIBRATION;
+
+  // 3. Compensate for Voltage Sag based on active Relay Loads
+  if (currentRelayState == 1 || currentRelayState == 2) {
+    battVoltage += 0.40; // Add 0.40V if one LED is ON
+  } else if (currentRelayState == 3) {
+    battVoltage += 0.58; // Add 0.58V if both LEDs are ON
+  }
+
+  // 4. Calculate Discrete Battery Percentage (3 Tiers) using compensated voltage
+  int percentage = 0;
+  if (battVoltage >= 12.1) {
+    percentage = 100;
+  } 
+  else if (battVoltage >= 11.5) {
+    percentage = 50;
+  } 
+  else {
+    percentage = 0;
+  }
+
+  // 5. Publish only if the percentage changes
+  if (percentage != lastBattPct) {
+    lastBattPct = percentage;
+    char pctStr[8];
+    snprintf(pctStr, sizeof(pctStr), "%d", percentage);
+    client.publish(batt_pct_topic, pctStr, true);
+    
+    Serial.printf(">> Battery Update: %.2fV (Compensated) -> %d%%\n", battVoltage, percentage);
+  }
+  //-----tesitng code remove later -----
+  Serial.println("Batt Volt: ");
+  Serial.println(battVoltage);
 }
 
 void checkPowerMonitor() {
@@ -243,6 +320,7 @@ void setup() {
   pinMode(POWER_MONITOR_PIN, INPUT);
   pinMode(CURRENT_PIN_1, INPUT);
   pinMode(CURRENT_PIN_2, INPUT);
+  pinMode(BATTERY_PIN, INPUT); // NEW: Initialize Battery ADC pin
 
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
@@ -252,6 +330,7 @@ void setup() {
   sprintf(power_topic, "metro/signage/register/%d/power", ASSIGNED_REGISTER);
   sprintf(current1_topic, "metro/signage/register/%d/current1", ASSIGNED_REGISTER);
   sprintf(current2_topic, "metro/signage/register/%d/current2", ASSIGNED_REGISTER);
+  sprintf(batt_pct_topic, "metro/signage/register/%d/battery_pct", ASSIGNED_REGISTER); // NEW
 
   Serial.printf("\n--- ESP32 Ethernet Signage Controller (%d) ---\n", ASSIGNED_REGISTER);
   
@@ -285,5 +364,6 @@ void loop() {
     client.loop();
     checkPowerMonitor();
     checkCurrentSensors();
+    checkBattery(); // NEW: Run the battery check loop
   }
 }
