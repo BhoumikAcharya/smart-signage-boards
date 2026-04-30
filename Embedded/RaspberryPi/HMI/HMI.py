@@ -133,13 +133,13 @@ class HMIApp(tk.Tk):
         # Dictionary to store references to our pages
         self.frames = {}
         
-        # Initialize the Dashboard Frame
+        # Initialize the Frames
         self.frames["Dashboard"] = DashboardFrame(parent=self.container, controller=self)
-        self.frames["Dashboard"].place(x=0, y=0, relwidth=1, relheight=1)
-        
-        # Initialize Node Detail Frame (starts empty/hidden)
         self.frames["NodeDetail"] = NodeDetailFrame(parent=self.container, controller=self)
-        self.frames["NodeDetail"].place(x=0, y=0, relwidth=1, relheight=1)
+        self.frames["Diagnostics"] = DiagnosticsFrame(parent=self.container, controller=self)
+        
+        for frame in self.frames.values():
+            frame.place(x=0, y=0, relwidth=1, relheight=1)
         
         # Start on Dashboard
         self.show_frame("Dashboard")
@@ -149,6 +149,8 @@ class HMIApp(tk.Tk):
         frame = self.frames[page_name]
         if page_name == "NodeDetail" and context:
             frame.load_node_data(context) # Pass the specific node data
+        elif page_name == "Diagnostics":
+            frame.refresh_diagnostics() # Ensure data is fresh when opening
         frame.tkraise()
 
 
@@ -171,7 +173,13 @@ class DashboardFrame(tk.Frame):
         
         tk.Label(top_bar, text="DASHBOARD", font=self.controller.font_h2, 
                  bg=COLORS["bg_lowest"], fg=COLORS["primary"]).pack(side="left", padx=24)
-                 
+        
+        # Gear icon for settings/diagnostics
+        lbl_diag = tk.Label(top_bar, text="⚙", font=("Helvetica", 20), 
+                            bg=COLORS["bg_lowest"], fg=COLORS["text_dim"], cursor="hand2")
+        lbl_diag.pack(side="right", padx=24)
+        lbl_diag.bind("<Button-1>", lambda e: self.controller.show_frame("Diagnostics"))
+        
         # Search Box (Using Label to prevent OS Keyboard focus)
         self.search_var = tk.StringVar(value="")
         self.search_var.trace("w", self.on_search)
@@ -182,7 +190,7 @@ class DashboardFrame(tk.Frame):
                                    bg=COLORS["bg_panel"], fg=COLORS["text_dim"], 
                                    highlightbackground=COLORS["border"], highlightthickness=1,
                                    width=25, anchor="w", padx=10)
-        self.search_btn.pack(side="right", padx=24, pady=12, fill="y")
+        self.search_btn.pack(side="right", padx=10, pady=12, fill="y")
         self.search_btn.bind("<Button-1>", self.open_keyboard)
         
         # --- TABLE HEADER ---
@@ -207,7 +215,7 @@ class DashboardFrame(tk.Frame):
         self.lbl_page_info = tk.Label(bottom_bar, text="1 - 8 / 100", font=self.controller.font_mono, bg=COLORS["bg_main"], fg=COLORS["text_dim"])
         self.lbl_page_info.pack(side="right", padx=24)
         
-        # Pagination Buttons - Changed from ipadx/ipady to explicit width/height in character units
+        # Pagination Buttons
         self.btn_next = tk.Button(bottom_bar, text="NEXT PAGE ➔", font=self.controller.font_body,
                                   bg=COLORS["bg_panel"], fg=COLORS["text_main"], relief="flat",
                                   activebackground=COLORS["bg_hover"], activeforeground=COLORS["primary"],
@@ -338,6 +346,7 @@ class NodeDetailFrame(tk.Frame):
         lbl_diag = tk.Label(top_bar, text="diagnostics ⚙", font=("Helvetica", 12, "bold"),
                             bg=COLORS["bg_lowest"], fg=COLORS["primary"], cursor="hand2")
         lbl_diag.pack(side="right", padx=24)
+        lbl_diag.bind("<Button-1>", lambda e: self.controller.show_frame("Diagnostics"))
 
         # --- CONTENT AREA ---
         content_frame = tk.Frame(self, bg=COLORS["bg_main"])
@@ -577,6 +586,116 @@ class NodeDetailFrame(tk.Frame):
         self.r1_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
         self.r2_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
         self.r2_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
+
+
+class DiagnosticsFrame(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg=COLORS["bg_main"])
+        self.controller = controller
+        self.setup_ui()
+
+    def setup_ui(self):
+        # --- HEADER ---
+        top_bar = tk.Frame(self, bg=COLORS["bg_lowest"], height=64)
+        top_bar.pack(fill="x", side="top")
+        top_bar.pack_propagate(False)
+        
+        lbl_back = tk.Label(top_bar, text="← BACK", font=("Helvetica", 12, "bold"),
+                            bg=COLORS["bg_lowest"], fg=COLORS["primary"], cursor="hand2")
+        lbl_back.pack(side="left", padx=24)
+        lbl_back.bind("<Button-1>", lambda e: self.controller.show_frame("Dashboard"))
+        
+        tk.Label(top_bar, text="SYSTEM DIAGNOSTICS", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_lowest"], fg=COLORS["primary"]).pack(side="left", expand=True)
+
+        # --- CONTENT AREA ---
+        content = tk.Frame(self, bg=COLORS["bg_main"])
+        content.pack(fill="both", expand=True, padx=32, pady=32)
+        
+        # Left Column
+        left_col = tk.Frame(content, bg=COLORS["bg_main"])
+        left_col.pack(side="left", fill="both", expand=True, padx=(0, 20))
+        
+        # Right Column
+        right_col = tk.Frame(content, bg=COLORS["bg_main"])
+        right_col.pack(side="right", fill="both", expand=True, padx=(20, 0))
+        
+        # --- LEFT COL: STATUS & METRICS ---
+        tk.Label(left_col, text="❖ GATEWAY STATUS", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w", pady=(0, 16))
+                 
+        self.create_info_row(left_col, "MQTT Broker (Paho)", "CONNECTED", COLORS["success"])
+        self.create_info_row(left_col, "Modbus TCP Server", "RUNNING (Port 502)", COLORS["success"])
+        self.create_info_row(left_col, "Master Gateway IP", "192.168.10.10", COLORS["primary"])
+        
+        tk.Label(left_col, text="❖ NETWORK HEALTH", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w", pady=(32, 16))
+                 
+        # Metric Counters
+        count_frame = tk.Frame(left_col, bg=COLORS["bg_main"])
+        count_frame.pack(fill="x")
+        
+        self.lbl_online = self.create_counter_box(count_frame, "ONLINE NODES", "80", COLORS["success"])
+        self.lbl_offline = self.create_counter_box(count_frame, "OFFLINE / FAULT", "20", COLORS["error"])
+
+        # --- RIGHT COL: MASTER ACTIONS ---
+        tk.Label(right_col, text="≢ MASTER ACTIONS", font=("Helvetica", 14, "bold"), 
+                 bg=COLORS["bg_main"], fg=COLORS["text_dim"]).pack(anchor="w", pady=(0, 16))
+                 
+        # Broadcast Ping Box
+        ping_frame = tk.Frame(right_col, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
+        ping_frame.pack(fill="x", pady=8, ipady=16)
+        
+        tk.Label(ping_frame, text="NETWORK HEARTBEAT", font=("Helvetica", 12, "bold"), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(pady=(10, 5))
+        tk.Label(ping_frame, text="Broadcast PING to reset 5-minute\nfail-safe timers across the fiber ring.", 
+                 font=("Helvetica", 10), justify="center", bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(pady=(0, 16))
+                 
+        self.btn_ping = tk.Button(ping_frame, text="BROADCAST PING", font=("Helvetica", 14, "bold"),
+                                  bg=COLORS["primary"], fg=COLORS["bg_lowest"], relief="flat",
+                                  width=20, height=2, activebackground=COLORS["bg_hover"],
+                                  command=self.send_ping)
+        self.btn_ping.pack()
+
+    def create_info_row(self, parent, label_text, value_text, color):
+        row = tk.Frame(parent, bg=COLORS["bg_panel"], height=52)
+        row.pack(fill="x", pady=4)
+        row.pack_propagate(False)
+        
+        tk.Label(row, text=label_text, font=("Helvetica", 12), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_main"]).pack(side="left", padx=16)
+                 
+        lbl = tk.Label(row, text=value_text, font=("Helvetica", 12, "bold"), 
+                       bg=COLORS["bg_panel"], fg=color)
+        lbl.pack(side="right", padx=16)
+        return lbl
+
+    def create_counter_box(self, parent, label_text, value_text, color):
+        box = tk.Frame(parent, bg=COLORS["bg_panel"], highlightbackground=COLORS["border"], highlightthickness=1)
+        box.pack(side="left", expand=True, fill="both", padx=4)
+        
+        lbl_val = tk.Label(box, text=value_text, font=("Helvetica", 36, "bold"), 
+                           bg=COLORS["bg_panel"], fg=color)
+        lbl_val.pack(pady=(16, 0))
+        
+        tk.Label(box, text=label_text, font=("Helvetica", 10, "bold"), 
+                 bg=COLORS["bg_panel"], fg=COLORS["text_dim"]).pack(pady=(0, 16))
+        return lbl_val
+
+    def send_ping(self):
+        # Placeholder for Phase 2 integration
+        self.btn_ping.config(text="PING SENT!", bg=COLORS["success"])
+        # Reset button visually after 2 seconds
+        self.after(2000, lambda: self.btn_ping.config(text="BROADCAST PING", bg=COLORS["primary"]))
+
+    def refresh_diagnostics(self):
+        # In Phase 2, this will count actual live nodes instead of mock data
+        online_count = sum(1 for node in MOCK_NODES if node["status"] == "ONLINE")
+        offline_count = len(MOCK_NODES) - online_count
+        
+        self.lbl_online.config(text=str(online_count))
+        self.lbl_offline.config(text=str(offline_count))
+
 
 if __name__ == "__main__":
     app = HMIApp()
