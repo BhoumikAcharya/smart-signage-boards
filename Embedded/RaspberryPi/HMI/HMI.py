@@ -546,10 +546,6 @@ class NodeDetailFrame(tk.Frame):
             self.lbl_mode_val.config(text="SCADA (AUTO)", fg=COLORS["primary"])
             self.draw_toggle(False)
             self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12)
-            self.r1_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
-            self.r1_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
-            self.r2_frame.config(highlightbackground=COLORS["border"], bg=COLORS["bg_main"])
-            self.r2_lbl.config(fg=COLORS["border"], bg=COLORS["bg_main"])
             
         self.update_relay_buttons()
 
@@ -573,7 +569,24 @@ class NodeDetailFrame(tk.Frame):
                 print(f"Modbus Write Relay Error: {e}")
 
     def update_relay_buttons(self):
-        if not self.mux_manual: return
+        if not self.mux_manual: 
+            # SCADA MODE: Show actual state, but locked (dimmer visuals)
+            if self.r1_on:
+                self.r1_frame.config(bg=COLORS["bg_main"], highlightbackground=COLORS["primary"])
+                self.r1_lbl.config(text="RELAY 1: ON", fg=COLORS["primary"], bg=COLORS["bg_main"])
+            else:
+                self.r1_frame.config(bg=COLORS["bg_main"], highlightbackground=COLORS["border"])
+                self.r1_lbl.config(text="RELAY 1: OFF", fg=COLORS["border"], bg=COLORS["bg_main"])
+                
+            if self.r2_on:
+                self.r2_frame.config(bg=COLORS["bg_main"], highlightbackground=COLORS["primary"])
+                self.r2_lbl.config(text="RELAY 2: ON", fg=COLORS["primary"], bg=COLORS["bg_main"])
+            else:
+                self.r2_frame.config(bg=COLORS["bg_main"], highlightbackground=COLORS["border"])
+                self.r2_lbl.config(text="RELAY 2: OFF", fg=COLORS["border"], bg=COLORS["bg_main"])
+            return
+            
+        # HMI MANUAL MODE: Show bold, active clickable colors
         if self.r1_on:
             self.r1_frame.config(bg=COLORS["primary"], highlightbackground=COLORS["primary"])
             self.r1_lbl.config(text="RELAY 1: ON", fg=COLORS["bg_lowest"], bg=COLORS["primary"])
@@ -597,11 +610,21 @@ class NodeDetailFrame(tk.Frame):
         with data_lock:
             self.header_var.set(NODE_DATA[n_idx]['id'])
             
-        # Reset to Auto safety
-        self.mux_manual = False
-        self.lbl_mode_val.config(text="SCADA (AUTO)", fg=COLORS["primary"])
-        self.draw_toggle(False)
-        self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12)
+        # MUX Mode is global. We DO NOT reset it here. 
+        # We just update the visuals to match the existing state.
+        if self.mux_manual:
+            self.lbl_mode_val.config(text="HMI (MANUAL)", fg=COLORS["alert"])
+            self.draw_toggle(True)
+            self.warn_frame.pack_forget()
+        else:
+            self.lbl_mode_val.config(text="SCADA (AUTO)", fg=COLORS["primary"])
+            self.draw_toggle(False)
+            self.warn_frame.pack(side="bottom", fill="x", pady=(20, 0), ipady=12)
+        
+        # Reset local relay state until the next sync_loop Modbus read
+        self.r1_on = False
+        self.r2_on = False
+        self.update_relay_buttons()
         
         self.refresh_data()
 
