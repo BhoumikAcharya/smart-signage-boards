@@ -10,17 +10,6 @@
 
 ---
 
-## 0. Before you compile
-
-The sketch lives in its **own folder**, `led_test_2/led_test_2.ino`. Open that file and upload
-normally.
-
-> **Don't copy it next to `Firmware_Test.ino`.** The Arduino IDE concatenates every `.ino` in a
-> sketch folder into one program, so the two would collide with duplicate `setup()` / `loop()`
-> errors.
-
----
-
 ## 1. What this sketch does
 
 It boots **straight into the `D` demo loop** from `Firmware_Test.ino` — no key press needed — and

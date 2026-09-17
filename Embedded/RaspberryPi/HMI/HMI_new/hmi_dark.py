@@ -108,7 +108,7 @@ for i in range(1, MAX_NODES + 1):
         "c3": "---",               # Static Zone 1
         "c4": "---",               # Static Zone 2
         "state": "---",            # actual executing mode (from MQTT)
-        "batt": "---",             # stubbed in firmware
+        "batt": "---",             # coarse 0/50/100 from the node (Phase 1 Part 2)
     }
 
 METRIC_KEYS = {
@@ -917,15 +917,16 @@ class NodeDetailFrame(tk.Frame):
                  bg=COLORS["bg"], fg=COLORS["dim"]).pack(anchor="w", pady=(0, 12))
         for key, label in [("status", "Connection Status"), ("power", "Main Power")] + SENSOR_LABELS:
             self.tel[key] = self._tel_row(label)
-        # battery — permanently greyed
+        # battery — coarse 0/50/100 reported by the node (Phase 1 Part 2)
         bat = card(self.colL, bg=COLORS["panel"])
         bat.pack(fill="x", pady=(14, 0))
         bi = tk.Frame(bat, bg=COLORS["panel"])
         bi.pack(fill="x", padx=16, pady=13)
         tk.Label(bi, text="Backup Battery", font=self.controller.f_body,
                  bg=COLORS["panel"], fg=COLORS["dim"]).pack(side="left")
-        tk.Label(bi, text="N/A · NOT FITTED", font=self.controller.f_mono,
-                 bg=COLORS["panel"], fg=COLORS["faint"]).pack(side="right")
+        self.batt_lbl = tk.Label(bi, text="—", font=self.controller.f_mono,
+                                 bg=COLORS["panel"], fg=COLORS["faint"])
+        self.batt_lbl.pack(side="right")
 
     def _tel_row(self, label):
         row = card(self.colL, bg=COLORS["panel"])
@@ -1119,6 +1120,18 @@ class NodeDetailFrame(tk.Frame):
         atext, akey, aval = parse_actual_state(nd["state"])
         acol = COLORS.get(akey, COLORS["dim"]) if akey in COLORS else COLORS["dim"]
         self.act_val.config(text=atext, fg=acol if akey != "dim" else COLORS["dim"])
+
+        # battery — coarse 0/50/100. Reads 100 on mains (the pack sits high while
+        # charging); once the PSU fails it follows the pack down. Offline/unknown -> N/A.
+        try:
+            bp = int(nd["batt"])
+        except (TypeError, ValueError):
+            bp = None
+        if not online or bp is None or bp == 65535:
+            self.batt_lbl.config(text="N/A", fg=COLORS["faint"])
+        else:
+            bcol = COLORS["ok"] if bp >= 100 else COLORS["warn"] if bp >= 50 else COLORS["fault"]
+            self.batt_lbl.config(text=f"{bp}%", fg=bcol)
 
         if aval is None:
             self.sync_lbl.config(
