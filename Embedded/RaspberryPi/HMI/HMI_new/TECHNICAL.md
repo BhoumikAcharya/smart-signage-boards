@@ -343,3 +343,42 @@ Needs running:   mosquitto  +  Gateway/Pi.py  +  this HMI  (all on the Pi)
 Reads:           MQTT 127.0.0.1:1883 (telemetry) · Modbus 127.0.0.1:502 (control)
 Writes:          41001+offset (commands) · 43001 (control source)
 ```
+
+---
+
+## 14. Troubleshooting
+
+A running log of field-diagnosed HMI issues and their fixes. Add new entries as
+they are solved.
+
+### 14.1 A node shows on Fleet Overview but is missing / stuck OFFLINE on the Signage List
+
+**Symptom.** A node that the gateway sees and that appears (correctly coloured)
+on Fleet Overview does not appear, or shows a stale OFFLINE row with no IP, on
+the **Signage List** — even though its telemetry is clearly arriving. Turning to
+the next page and back, or typing in the search box and clearing it, makes the
+node appear correctly.
+
+**Root cause.** The data was in `NODE_DATA` the whole time; only the Signage
+List's *rendering* was stale. Fleet Overview's `refresh_data()` re-derives health
+and recolours its tiles every 500 ms tick, so it is always live. The Signage
+List, however, drew its table once via `_render_rows()` and only re-ran it on a
+**search keystroke** or a **page turn** — its `refresh_data()` did *not* touch
+the rows. All frames are built at startup, before telemetry arrives, and retained
+MQTT messages flood in as a race on connect: whichever node's `status` had been
+ingested at that single render showed ONLINE; a node whose telemetry landed a
+moment later stayed frozen as OFFLINE until the next search/page turn.
+
+**Fix (implemented).** `SignageListFrame.refresh_data()` now live-updates the
+visible rows **in place** every tick — IP label, status dot, and health word —
+reusing the widgets cached in `self.row_widgets`, with no teardown/rebuild
+(matching the flicker-free, cache-and-recolour discipline used by Fleet Overview;
+see §10.2). `_render_rows()` is still used for *structural* changes only — which
+rows and which page are shown — on startup, search, and paging. The cached tuple
+was extended from `(idx, ipl, st, d)` to `(idx, ipl, d, wl)` so the health-word
+label can be recoloured in place. Applied identically to `hmi_dark.py` and
+`hmi_light.py` (see §11).
+
+**How to confirm on hardware.** Bring a node online *after* the HMI is already on
+the Signage List screen; its row should flip to ONLINE with its IP within ~500 ms
+without any search or page turn.

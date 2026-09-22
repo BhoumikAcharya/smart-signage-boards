@@ -834,11 +834,12 @@ class SignageListFrame(tk.Frame):
                 d = dot(st, COLORS[h] if h != "off" else COLORS["off"], 9)
                 d.configure(bg=bg)
                 d.pack(side="left", pady=10)
-                tk.Label(st, text=HEALTH_WORD[h], font=self.controller.f_label, bg=bg,
-                         fg=COLORS[h] if h != "off" else COLORS["off"]).pack(side="left", padx=8)
+                wl = tk.Label(st, text=HEALTH_WORD[h], font=self.controller.f_label, bg=bg,
+                              fg=COLORS[h] if h != "off" else COLORS["off"])
+                wl.pack(side="left", padx=8)
                 for w in (row, idl, ipl, rgl):
                     w.bind("<Button-1>", lambda e, i=idx: self.controller.show_frame("NodeDetail", i))
-                self.row_widgets.append((idx, ipl, st, d))
+                self.row_widgets.append((idx, ipl, d, wl))
 
     def refresh_data(self):
         self.topbar.refresh(online=counts()["online"])
@@ -846,6 +847,19 @@ class SignageListFrame(tk.Frame):
         if m is not None and m != self.mux_manual:
             self.mux_manual = m
             self._apply_mux_style()
+        # Live-refresh the visible rows in place (no teardown, matching Fleet
+        # Overview) so a node whose telemetry arrives after the table was drawn
+        # updates without needing a search or page turn. Structural changes
+        # (which rows/pages are shown) still go through _render_rows on search
+        # and paging.
+        with data_lock:
+            for idx, ipl, d, wl in self.row_widgets:
+                nd = NODE_DATA[idx]
+                h = node_health(nd)
+                col = COLORS[h] if h != "off" else COLORS["off"]
+                ipl.config(text=nd["ip"])
+                set_dot(d, col)
+                wl.config(text=HEALTH_WORD[h], fg=col)
 
 
 # ======================================================================

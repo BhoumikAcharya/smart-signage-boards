@@ -55,9 +55,9 @@
 // ========================================================
 const char* mqtt_server_ip   = "192.168.1.10";     // Pi, ESP32-side static IP
 const int   mqtt_port        = 1883;
-const int   ASSIGNED_REGISTER = 40001;              // node 1 = 40001, node 2 = 40002 ...
+const int   ASSIGNED_REGISTER = 40002;              // node 1 = 40001, node 2 = 40002 ...
 
-IPAddress local_IP  (192, 168, 1, 101);             // must be unique per unit
+IPAddress local_IP  (192, 168, 1, 102);             // must be unique per unit
 IPAddress gateway_ip(192, 168, 1, 1);
 IPAddress subnet    (255, 255, 255, 0);
 IPAddress primaryDNS(8, 8, 8, 8);
