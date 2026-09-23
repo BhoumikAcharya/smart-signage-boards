@@ -1105,12 +1105,22 @@ class NodeDetailFrame(tk.Frame):
         self.set_sub_dot(node_health(nd))
 
         pv, pd = self.tel["power"]
-        pcol = COLORS["ok"] if nd["power"] == "OK" else COLORS["fault"] if nd["power"] == "FAIL" else COLORS["dim"]
-        pv.config(text=nd["power"] if nd["power"] != "---" else "—", fg=pcol)
-        set_dot(pd, pcol)
+        if not online:
+            # Node offline: outputs are unknown, not "OK"/"ON" — show them as such
+            # rather than freezing on the last-received value (mirrors battery below).
+            pv.config(text="—", fg=COLORS["dim"])
+            set_dot(pd, COLORS["off"])
+        else:
+            pcol = COLORS["ok"] if nd["power"] == "OK" else COLORS["fault"] if nd["power"] == "FAIL" else COLORS["dim"]
+            pv.config(text=nd["power"] if nd["power"] != "---" else "—", fg=pcol)
+            set_dot(pd, pcol)
 
         for key, _label in SENSOR_LABELS:
             v, d = self.tel[key]
+            if not online:
+                v.config(text="—", fg=COLORS["dim"])
+                set_dot(d, COLORS["off"])
+                continue
             h = four_state_health(nd[key])
             col = COLORS[h] if h != "dim" else COLORS["dim"]
             v.config(text=nd[key] if nd[key] != "---" else "—", fg=col)
@@ -1131,9 +1141,16 @@ class NodeDetailFrame(tk.Frame):
             self._update_mode_btns()
         self.cmd_val.config(text=mode_label(self.commanded) if self.commanded is not None else "—")
 
-        atext, akey, aval = parse_actual_state(nd["state"])
-        acol = COLORS.get(akey, COLORS["dim"]) if akey in COLORS else COLORS["dim"]
-        self.act_val.config(text=atext, fg=acol if akey != "dim" else COLORS["dim"])
+        if not online:
+            # Offline: we cannot verify what the node is executing. Force the
+            # actual/sync path to "unknown" (aval None, atext "—") so the sync
+            # label below blanks instead of falsely reporting IN SYNC.
+            atext, aval = "—", None
+            self.act_val.config(text="—", fg=COLORS["dim"])
+        else:
+            atext, akey, aval = parse_actual_state(nd["state"])
+            acol = COLORS.get(akey, COLORS["dim"]) if akey in COLORS else COLORS["dim"]
+            self.act_val.config(text=atext, fg=acol if akey != "dim" else COLORS["dim"])
 
         # battery — coarse 0/50/100. Reads 100 on mains (the pack sits high while
         # charging); once the PSU fails it follows the pack down. Offline/unknown -> N/A.

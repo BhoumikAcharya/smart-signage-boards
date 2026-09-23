@@ -70,8 +70,8 @@ IPAddress primaryDNS(8, 8, 8, 8);
  * value is not trusted; SENS/ZERO are hand-calibrated per board and reflashed.
  */
 const float SENS_LEFT = 0.185f, ZERO_LEFT = 2.20f;    // arrows  — 5A part
-const float SENS_RGHT = 0.185f, ZERO_RGHT = 2.39f;   // arrows  — 5A part
-const float SENS_STA1 = 0.185f, ZERO_STA1 = 2.39f;   // static  — 5A part
+const float SENS_RGHT = 0.185f, ZERO_RGHT = 2.450f;   // arrows  — 5A part
+const float SENS_STA1 = 0.185f, ZERO_STA1 = 2.437f;   // static  — 5A part
 const float SENS_STA2 = 0.185f, ZERO_STA2 = 2.28f;   // static  — 5A part
 
 // PSU voltage divider: Vbus = Vadc * ratio. Per-board — set with a multimeter.
