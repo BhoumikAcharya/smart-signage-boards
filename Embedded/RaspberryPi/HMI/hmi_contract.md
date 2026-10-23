@@ -2,7 +2,7 @@
 
 **Written:** 2026-07-20, after `Pi.py` v2.0.0 was finalized. The HMI is the **last** build task, after the ESP32 firmware.
 **Purpose:** capture every constraint the finished gateway imposes on the HMI, so the screen design starts from facts rather than from the current (outdated) `HMI.py`.
-**Companion docs:** `../pi_agent.md`, `../Gateway/Gateway_doc.md`, `../../ESP32/esp32_contract.md`.
+**Companion docs:** `../pi_agent.md`, `../Gateway/Gateway_doc.md`, `../../ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` (authoritative ESP32 reference; `../../ESP32/esp32_contract.md` is superseded).
 
 ---
 
@@ -180,7 +180,11 @@ python3 RaspberryPi/HMI/HMI.py
 
 ## 6. Battery — greyed, not hidden
 
-Battery is stubbed in firmware and is **the next task after this HMI**. Decision: keep the gauge visible but permanently greyed, labelled `N/A` / `NOT FITTED`, so the layout slot survives for when it lands.
+> **Superseded 2026-10-23.** Battery landed in firmware v4.1.0 and the slot is now live. The text below describes the original decision and is kept for history.
+
+**Current behaviour:** the node publishes a coarse `100` / `50` / `0` band. `HMI_new/hmi_light.py` and `hmi_dark.py` display it (green / amber / red, `N/A` when offline or unknown). The older `HMI.py` still hardcodes `N/A` / `NOT FITTED` and does **not** show the live value — it predates the feature and is superseded by the `HMI_new` builds.
+
+*Original decision:* battery is stubbed in firmware and is **the next task after this HMI**. Keep the gauge visible but permanently greyed, labelled `N/A` / `NOT FITTED`, so the layout slot survives for when it lands.
 
 Diagnostic register `+4` carries `65535` = unknown. If the HMI ever reads battery from Modbus rather than MQTT, it must treat `65535` as "no data" and **never** render it as `65535%` or coerce it to `0%`.
 

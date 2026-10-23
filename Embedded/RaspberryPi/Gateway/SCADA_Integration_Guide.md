@@ -10,7 +10,8 @@ source to integrate correctly. Everything the control system needs — addressin
 encoding, alarm logic, timing, and failure behaviour — is here.
 
 > Companion documents (for developers, not integrators): `Gateway_doc.md`,
-> `../pi_agent.md`, `../../ESP32/esp32_contract.md`.
+> `../pi_agent.md`, `../../ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` (authoritative ESP32
+> reference; `../../ESP32/esp32_contract.md` is superseded).
 
 ---
 
@@ -297,6 +298,40 @@ Each node occupies 8 consecutive registers starting at `45001 + (N − 1) × 8`.
 `2` and `3` are genuine hardware faults requiring dispatch. `99` is an absence of
 information and must never raise a health alarm.
 
+#### ⚠️ Not every channel can produce all four values — read this before writing alarms
+
+**Corrected 2026-10-23.** This section previously implied all four health registers were
+measured. They are not. Only the two static zones are.
+
+| Register | Channel | Values it can actually produce |
+| --- | --- | --- |
+| `+2` | LHS arrows | **`0` or `1` only** |
+| `+3` | RHS arrows | **`0` or `1` only** |
+| `+5` | Static Zone 1 | `1` or `2` (and `99` when unknown) |
+| `+6` | Static Zone 2 | `1` or `2` (and `99` when unknown) |
+
+**The arrow registers are intent-echo, not measurement.** They report what the node was
+*commanded* to do, not what was measured. Arrow diagnostics were implemented and then
+deliberately withdrawn: a 2-strip chase draws about 0.17 A, roughly 40 ADC counts on the 5 A
+ACS712, which sits inside the sensor's own noise. Measuring it continuously false-alarmed in both
+directions. Real arrow health returns as an **on-demand all-arrows-on self-test in Phase 3**,
+where the signal clears the noise floor by roughly 5x.
+
+**Consequences for the PLC program:**
+
+* **`FAIL_SHORT` (`3`) is currently unreachable on every channel.** An alarm keyed on it will
+  never fire anywhere.
+* **`FAIL_OPEN` (`2`) can only ever come from `+5` and `+6`**, the static zones. An arrow
+  `FAIL_OPEN` alarm will never fire.
+* **Arrow health is therefore not monitored today.** A burnt arrow strip raises nothing. Do not
+  build a process that assumes it does, and do not treat `+2`/`+3` reading `1` as evidence the
+  arrows are lit.
+* Static zones are hardwired always-on, so `+5` and `+6` can never legitimately report `0` or
+  `3`. If one reads `0`, the fault is in the sensing chain, not the load.
+
+Keep `2` and `3` in your mapping — they become reachable again when Phase 3 lands. Just do not
+depend on them for the arrows yet.
+
 ### 5.2 ⚠️ Rule zero: gate everything on `+0`
 
 **Check network status (`+0`) before interpreting any other register in the block.**
@@ -367,14 +402,30 @@ ELSE IF 45008+(N-1)*8 <> 40000+N
 > If this alarm appears to be "stuck", the sign is broken. It is not a nuisance
 > alarm and must not be suppressed.
 
-### 5.5 Battery reads `65535`, not `0`
+### 5.5 Battery — now live, but coarse
 
-Battery monitoring is **not yet implemented in the node firmware**. The register is
-reserved and reads the `65535` "unknown" sentinel.
+**Updated 2026-10-23. This section previously said battery was not implemented. It now is.**
 
-`65535` is used rather than `0` precisely because `0` would be indistinguishable
-from a genuinely flat battery. **Do not alarm on this register.** Do not display it
-as `0%`. Display it as "not available" or hide it until the feature ships.
+Register `+4` carries a **coarse three-band** value, not a true percentage:
+
+| Value | Meaning |
+| --- | --- |
+| `100` | On mains, or pack healthy |
+| `50` | **On battery, discharging, not yet critical** — not "half full" |
+| `0` | Pack genuinely near empty |
+| `65535` | Unknown — node offline, or has not sampled yet |
+
+A precise percentage is **not achievable** on this hardware: the 4S LiFePO4 curve is flat, load
+sag is large, and ADC noise is around +/-0.3 V. Three bands with hysteresis is the honest limit.
+
+**Display it as a three-state indicator, not a percentage bar.** Showing "50%" next to a fuel
+gauge invites an operator to read it as half the runtime remaining, which it is not.
+
+`65535` is still used rather than `0` because `0` would be indistinguishable from a genuinely
+flat pack. **Never coerce `65535` to `0%` and never filter it out.**
+
+> **Thresholds are still provisional** pending a full discharge-to-cutoff run. Treat `50` as an
+> advisory, not a dispatch trigger. The dispatch trigger remains the PSU alarm in §5.3.
 
 ### 5.6 Fault signature table
 
@@ -404,7 +455,8 @@ Expected on the bench; **treat as a genuine fault on a live site.**
 | Online + `FAIL_OPEN` on any channel | **Medium** — sign partly or wholly dark |
 | Online + commanded ≠ actual, `+7` numeric, > 5 s | **Medium** — displaying the wrong thing |
 | Offline | **Medium** — but see §6.2 before setting the delay |
-| Battery register | **Do not alarm** — not implemented |
+| Battery register `+4` == `0` | **Medium** — pack near empty. Advisory; thresholds provisional (§5.5) |
+| Battery register `+4` == `50` or `65535` | **Do not alarm** — `50` is advisory, `65535` is absence of data |
 
 ---
 
@@ -485,7 +537,8 @@ Work through this before handover. Each step catches a specific, known failure m
 13. With a node online, have the bench technician disconnect its output driver.
     Confirm `+7` → `65535` while `+0` stays `1`, and that this raises the
     **hardware fault** branch, not the offline branch.
-14. Confirm the battery register reads `65535` and raises no alarm.
+14. Confirm the battery register reads `100` on mains (or `65535` before the first sample) and
+    that neither raises an alarm. See §5.5 — it is a three-band value, not a percentage.
 
 **Resilience — catches the write-once mistake**
 
@@ -508,7 +561,7 @@ CONFIRM node N       read   40000+N            must match within 1 s
 MUX FLAG             r/w    43001              0 = SCADA controls   1 = HMI controls
 DIAG node N base     read   45001 + (N-1)*8    8 registers
 
-  +0 network   1=online 0=offline      +4 battery   65535=unknown (not implemented)
+  +0 network   1=online 0=offline      +4 battery   100/50/0 band, 65535=unknown
   +1 power     1=ok 0=fail (gate!)     +5 static Z1 4-state
   +2 left LED  4-state                 +6 static Z2 4-state
   +3 right LED 4-state                 +7 actual    mode, or 65535=unknown (2 causes)
@@ -524,7 +577,8 @@ ALARMS       gate EVERYTHING on +0 == 1 first
 MUST DO      re-assert 42001+ CYCLICALLY - a gateway restart zeroes it and blanks every sign
              display a banner whenever 43001 == 1 - your writes are ignored
              inhibit offline alarms 90 s after (re)connect
-             never write 40001+   never alarm on battery   never filter 65535
+             never write 40001+   never filter 65535   battery is a BAND not a percentage
+             arrows (+2/+3) are intent-echo - FAIL_* never fires there (see 5.1)
 ```
 
 ---
@@ -537,7 +591,8 @@ Disclosed so they are designed around rather than discovered in service.
 | --- | --- | --- |
 | 1 | **No register persistence.** A gateway restart zeroes the command buffer and blanks every sign. | Handled by cyclic re-assertion — §4.4. **Mandatory.** |
 | 2 | **Nodes do not retain their command across a reboot.** A node that reboots while the sign network is down comes up dark and stays dark until the network returns. | A sign may be dark with no fault reported, because an offline node reports nothing. Covered by the offline alarm. |
-| 3 | **Battery monitoring not implemented.** Register `+4` reads `65535`. | Do not alarm; do not display as a percentage. |
+| 3 | **Battery is a coarse 100/50/0 band, not a percentage.** Thresholds provisional. | Display as a three-state indicator, not a gauge. Do not dispatch on it — use the PSU alarm. |
+| 3a | **Arrow health (`+2`/`+3`) is intent-echo, not measured.** A burnt arrow strip raises nothing until the Phase-3 self-test ships. | Do not assume arrow coverage. `FAIL_SHORT` is unreachable on every channel today. |
 | 4 | **Maintenance modes are not gated on the Modbus interface.** The HMI PIN does not apply to SCADA writes. | Enforce in the PLC program if required. |
 | 5 | **Calibration is indistinguishable from an output fault** (both give ONLINE + `65535`). | Only occurs during commissioning. Treat as a real fault in service. |
 | 6 | **No authentication on Modbus.** Any host on `10.45.2.0/24` can command every sign. | Security is by network isolation only. Control physical and switch access to that segment. |

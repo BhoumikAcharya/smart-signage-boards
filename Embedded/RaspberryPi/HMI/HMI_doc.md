@@ -101,10 +101,10 @@ Project Phase: V1 Decoupled Architecture
 | --- | --- |
 | `status` | connection LED + IP (`split(":", 1)`, matching the gateway's parse) |
 | `power` | Main Power row |
-| `current1` / `current2` | LHS / RHS Arrows |
+| `current1` / `current2` | LHS / RHS Arrows — **`ON`/`OFF` only; intent-echo, not measured** (corrected 2026-10-23) |
 | `current3` / `current4` | **Static Zone 1 / Static Zone 2** |
 | `state` | **actual executing mode** — drives the commanded-vs-actual panel |
-| `battery_pct` | permanently greyed `N/A` / `NOT FITTED` — firmware never publishes it |
+| `battery_pct` | **Live since firmware v4.1.0** (corrected 2026-10-23): coarse `100` / `50` / `0` band, rendered green / amber / red by `HMI_new/hmi_{light,dark}.py`; `N/A` only when offline or unknown. The older `HMI.py` still hardcodes `N/A` / `NOT FITTED` and does not show it |
 
 > **Corrected 2026-08-07.** v1.0 listed only `status`, `power`, `current1`, `current2` and
 > `battery_pct`. The HMI was blind to both static zones and to `state`; it was fixed on 2026-07-27

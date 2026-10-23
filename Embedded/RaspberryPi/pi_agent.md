@@ -202,12 +202,21 @@ If firmware and gateway disagree on this, **nothing matches, every node reads OF
 | --- | --- | --- |
 | `status` | `ONLINE:<ip>` or `OFFLINE` | Gateway parses the IP out of the `ONLINE:` prefix |
 | `power` | `OK` \| `FAIL` | |
-| `current1` | 4-state string | LHS arrows (ACS712 on GPIO 34) |
-| `current2` | 4-state string | RHS arrows (ACS712 on GPIO 35) |
+| `current1` | **`ON` / `OFF` only** | LHS arrows (ACS712 on GPIO 34) — **intent-echo, not measured.** Never `FAIL_*`. See note below |
+| `current2` | **`ON` / `OFF` only** | RHS arrows (ACS712 on GPIO 35) — **intent-echo, not measured.** Never `FAIL_*`. See note below |
 | `current3` | 4-state string | **Static Zone 1** (ACS712 on GPIO 32) |
 | `current4` | 4-state string | **Static Zone 2** (ACS712 on GPIO 33) |
-| `battery_pct` | integer `0`–`100` | stubbed in firmware — v3.0.0 **never publishes this topic at all**. The gateway maps the absent value to `65535`. Publishing `0` would read as a genuinely flat battery. |
+| `battery_pct` | **`100` / `50` / `0`** | **Live since firmware v4.1.0** (this row previously said "stubbed, never published" — corrected 2026-10-23). A coarse three-band value, **not** a percentage: `50` means "on battery, discharging, not yet critical". The gateway maps an absent or unparseable value to `65535`; publishing `0` would read as a genuinely flat battery. Thresholds provisional. |
 | `state` | integer, **or `FAULT`** | **NEW 2026-07-20.** The mode the node is ACTUALLY executing — not what it was told. Restores v1.1.1's "SCADA blind spot fix". Published on every *verified* command change and on PING. |
+
+> **⚠️ Arrow health is intent-echo, not measurement — corrected 2026-10-23.** `current1` and
+> `current2` report what the side was *commanded* to do, not what was measured, and can never emit
+> `FAIL_OPEN` or `FAIL_SHORT`. Arrow diagnostics were implemented and then deliberately withdrawn:
+> a 2-strip chase draws ~0.17 A, about 40 ADC counts on the 5 A ACS712, inside the sensor's own
+> noise. Real arrow health returns as the Phase-3 all-arrows-on self-test. Only `current3` and
+> `current4` (the static zones) are measured, and being hardwired always-on they can only report
+> `ON` or `FAIL_OPEN`. **Net effect: `FAIL_SHORT` is unreachable on every channel today.**
+> Authoritative detail: `ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` §11.
 
 **`state` payload semantics — the two divergence cases are deliberately different payloads:**
 

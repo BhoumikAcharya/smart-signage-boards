@@ -2,7 +2,9 @@
 
 **Doc last reconciled against code:** 2026-08-07.
 
-> **The finalized pin map is [`Embedded/ESP32/esp32_contract.md`](../../Embedded/ESP32/esp32_contract.md) §1**, confirmed 2026-07-13. It supersedes this file wherever the two disagree. This document is the wiring / build sheet.
+> **The finalized pin map is [`Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md`](../../Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md) §8**, authoritative from 2026-10-23. It supersedes this file wherever the two disagree. This document is the wiring / build sheet.
+>
+> `esp32_contract.md` §1 held the pin map before 2026-10-23 and is now a historical record.
 >
 > **Two items here are still unresolved and marked 🔴 below** — the ACS712 part numbers and the physical arrow strip order. Both must be settled on the bench; see §7.
 

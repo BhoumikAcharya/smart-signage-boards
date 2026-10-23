@@ -136,7 +136,7 @@ Each node occupies exactly **8** registers in the `45001+` diagnostic block. Nod
 | +6 | `45007` | **Static Zone 2** Health | 4-state |
 | +7 | `45008` | **Actual Executing State** | the mode the node reports running (`0`–`6`, `10000+`), or `65535` = unknown — **two causes, see below** |
 
-**Battery is currently stubbed in firmware.** The node deliberately does not publish `battery_pct` at all; the gateway maps the missing value to the `65535` sentinel. This is deliberate: `0` would be indistinguishable from a genuinely flat battery, so an offline or unfitted node must never report `0%` to SCADA.
+**Battery is live as of firmware v4.1.0, but coarse.** *(Corrected 2026-10-23 — this paragraph previously said battery was stubbed and never published.)* The node publishes a three-band value on `battery_pct`: `100` (on mains or pack healthy), `50` (**on battery, discharging, not yet critical** — not "half full"), or `0` (genuinely near empty). A precise percentage is not achievable on the 4S LiFePO4 pack. The gateway maps a missing or unparseable value to the `65535` sentinel, which must never be coerced to `0%` — `0` would be indistinguishable from a genuinely flat battery. Thresholds are provisional pending a full discharge run.
 
 Unparseable or offline 4-state values map to `99`.
 

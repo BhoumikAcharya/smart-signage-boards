@@ -2,7 +2,7 @@
 
 Machine-readable state capture. Repo: `smart-signage-boards`. Domain: metro emergency
 signage — PLC/Modbus ⇄ Raspberry Pi gateway ⇄ MQTT ⇄ ESP32 nodes, all wired Ethernet.
-Read `README.md` (root) + `Embedded/ESP32/esp32_contract.md` (authoritative ESP32 spec)
+Read `README.md` (root) + `Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` (authoritative ESP32 reference)
 for system context.
 
 ## GOAL
@@ -31,7 +31,8 @@ Rework ESP32 node firmware in 3 phases. All work + docs in `Embedded/ESP32/Workb
 - `Embedded/ESP32/Workbench/Docs/Phase1-Part2_Battery-Calibration-Report.md` — battery calibration report + Option-B decision.
 - `Embedded/RaspberryPi/HMI/HMI_new/hmi_light.py` / `hmi_dark.py` — new HMIs (near-identical light/dark); battery display edited in both.
 - `Embedded/RaspberryPi/Gateway/Pi.py` — Modbus↔MQTT bridge (unchanged; `map_battery_to_int` already handles the number).
-- `Embedded/ESP32/esp32_contract.md` — AUTHORITATIVE ESP32 contract. Wins on conflicts.
+- `Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` — AUTHORITATIVE ESP32 reference (promoted 2026-10-23). Wins on conflicts.
+- `Embedded/ESP32/esp32_contract.md` — SUPERSEDED 2026-10-23. Historical record; carries a banner listing where it is wrong.
 - `Embedded/ESP32/Workbench/Firmware_Test/demo_mode_v2.0.0/CHASE_ANIMATION_SPEC.md` — chase pattern spec.
 
 ## DECISIONS & RATIONALE (do not relitigate)

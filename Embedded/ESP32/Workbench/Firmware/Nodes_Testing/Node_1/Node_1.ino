@@ -5,7 +5,8 @@
  * ========================================================
  * Target : PCB V3, ESP32 + LAN8720 + MCP23017 (10 MOSFETs) + 4x ACS712 + battery
  * Pairs with : RaspberryPi/Gateway/Pi.py v2.0.0
- * Contract   : ESP32/esp32_contract.md
+ * Reference  : ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md  (AUTHORITATIVE)
+ *              ESP32/esp32_contract.md is SUPERSEDED as of 2026-10-23.
  *
  * PHASE 1 · PART 2 — HARDCODED BENCH BUILD, NOW WITH BATTERY.
  *   v4.0.0-p1 (Part 1) plus a coarse battery gauge. Still fully hardcoded:
@@ -31,7 +32,7 @@
  * The battery thresholds are PROVISIONAL (Option B, coarse) — refine after a full
  * discharge-to-cutoff test. Current-health for the arrows stays intent-echo.
  *
- * WHAT CARRIED OVER FROM v3.0.0 (unchanged, deliberate — see esp32_contract.md §8):
+ * WHAT CARRIED OVER FROM v3.0.0 (unchanged, deliberate — see v4.1.0/firmware_doc.md):
  *   - I2C on 4/13 (GPIO17 is the LAN8720 50MHz clock).
  *   - 4 ACS712 channels: current1/2 = LHS/RHS arrows (intent-echo), current3/4 =
  *     static zones 1/2 (measured 4-state, hardwired always-on).

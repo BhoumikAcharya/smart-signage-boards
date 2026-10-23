@@ -5,7 +5,8 @@
  * ========================================================
  * Target : PCB V3, ESP32 + LAN8720 + MCP23017 (10 MOSFETs) + 4x ACS712
  * Pairs with : RaspberryPi/Gateway/Pi.py v2.0.0
- * Contract   : ESP32/esp32_contract.md
+ * Reference  : ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md  (AUTHORITATIVE)
+ *              ESP32/esp32_contract.md is SUPERSEDED as of 2026-10-23.
  *
  * PHASE 1 · PART 1 — HARDCODED BENCH BUILD, NO BATTERY.
  *   The purpose of this build is bring-up: get a handful of nodes onto Ethernet,
@@ -29,7 +30,7 @@
  * approximate until Phase-2 auto-calibration derives per-board values. Good
  * enough to verify connectivity and functionality; not yet a trustworthy alarm.
  *
- * WHAT CARRIED OVER FROM v3.0.0 (unchanged, deliberate — see esp32_contract.md §8):
+ * WHAT CARRIED OVER FROM v3.0.0 (unchanged, deliberate — see v4.1.0/firmware_doc.md):
  *   - I2C on 4/13 (GPIO17 is the LAN8720 50MHz clock).
  *   - 4 ACS712 channels: current1/2 = LHS/RHS arrows (switched), current3/4 =
  *     static zones 1/2 (hardwired always-on, monitored, never switched).

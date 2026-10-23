@@ -11,7 +11,8 @@
 | PLC / SCADA integration | [`Embedded/RaspberryPi/Gateway/SCADA_Integration_Guide.md`](Embedded/RaspberryPi/Gateway/SCADA_Integration_Guide.md) |
 | Gateway internals | [`Embedded/RaspberryPi/Gateway/Gateway_doc.md`](Embedded/RaspberryPi/Gateway/Gateway_doc.md) |
 | Platform / deployment | [`Embedded/RaspberryPi/pi_agent.md`](Embedded/RaspberryPi/pi_agent.md) |
-| ESP32 firmware contract | [`Embedded/ESP32/esp32_contract.md`](Embedded/ESP32/esp32_contract.md) |
+| ESP32 firmware (**authoritative**) | [`Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md`](Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md) |
+| ESP32 firmware contract — *superseded 2026-10-23, historical* | [`Embedded/ESP32/esp32_contract.md`](Embedded/ESP32/esp32_contract.md) |
 | HMI | [`Embedded/RaspberryPi/HMI/hmi_contract.md`](Embedded/RaspberryPi/HMI/hmi_contract.md) |
 
 ---
@@ -72,7 +73,7 @@
 
   3.7. Commanded vs Actual: Each node publishes what it is **actually executing**, not just what it was told. A node that cannot verify its own outputs reports a hardware fault that cannot be cleared by commanding anything. This is the system's most serious alarm — see the integration guide.
 
-  3.8. Battery diagnostics are **still in development**. The firmware deliberately publishes nothing for battery, and the gateway reports `65535` = unknown. It is never reported as `0%`, which would be indistinguishable from a genuinely flat battery. **SCADA must not alarm on it.**
+  3.8. Battery diagnostics are **live as of firmware v4.1.0**, but deliberately **coarse**: the node publishes `100` / `50` / `0` on `battery_pct`, not a true percentage. `50` means "on battery, discharging, not yet critical" — not half full. A precise gauge is not achievable on a 4S LiFePO4 pack (flat curve, load sag, ADC noise), so three bands with hysteresis is the honest limit. A missing or unsampled value still maps to `65535` = unknown; it is never reported as `0%`, which would be indistinguishable from a genuinely flat battery. Thresholds remain provisional pending a full discharge run — see `Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` §2.
 
 4. Hardware Components -
 
@@ -103,7 +104,8 @@
     10.1" Waveshare DSI Capacitive Touch Display for HMI (1280x800)
 
 > Wiring detail lives in `PCB/PCB_V3/Connections.md`, but **the finalized pin map is
-> `Embedded/ESP32/esp32_contract.md` §1**, which supersedes it where they disagree.
+> `Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` §8**, which supersedes it where they
+> disagree. (`esp32_contract.md` §1 held this before 2026-10-23 and is now historical.)
 
 5. Software & Libraries -
 

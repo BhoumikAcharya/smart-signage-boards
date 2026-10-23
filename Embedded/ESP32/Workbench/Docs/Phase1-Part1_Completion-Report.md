@@ -7,7 +7,7 @@
 | **Working file** | `Embedded/ESP32/Workbench/Firmware/Firmware.ino` |
 | **Baseline** | Forked from production `ESP32/Firmware/Firmware.ino` v3.0.0 |
 | **Pairs with** | `RaspberryPi/Gateway/Pi.py` v2.0.0 |
-| **Authoritative contract** | `Embedded/ESP32/esp32_contract.md` (wins on any conflict) |
+| **Authoritative reference** | `Embedded/ESP32/Workbench/Firmware/v4.1.0/firmware_doc.md` (promoted 2026-10-23; wins on any conflict). `Embedded/ESP32/esp32_contract.md` is superseded |
 | **Status** | ✅ Complete — compiles clean, flashed and bench-tested for connectivity |
 | **Toolchain** | `esp32:esp32` core 3.3.8 · PubSubClient 2.8 · Adafruit MCP23017 2.3.2 |
 

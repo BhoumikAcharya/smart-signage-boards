@@ -328,7 +328,7 @@ COLORS = {
   unrestricted in this build. A PIN gate is specified in `../hmi_contract.md §3`
   and deferred.
 - **Alarms rail shows the top 9** with a "+N more" note; it does not scroll yet.
-- **Battery** is permanently greyed (`N/A / NOT FITTED`) — stubbed in firmware.
+- **Battery** is **live** (corrected 2026-10-23): the node publishes a coarse `100` / `50` / `0` band on `battery_pct` and these builds render it green / amber / red. `N/A` is shown only when the node is offline or the value is unknown (`65535`). `50` means "on battery, discharging, not yet critical", **not** half full — do not present it as a fuel gauge.
 
 ---
 

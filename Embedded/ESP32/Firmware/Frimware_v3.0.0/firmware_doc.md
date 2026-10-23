@@ -3,8 +3,10 @@
 **Phase:** 1 · Part 1 — *hardcoded bench build, no battery*
 **Role:** Hardware edge controller & network node (bring-up / connectivity testing)
 **Pairs with:** `RaspberryPi/Gateway/Pi.py` v2.0.0
-**Contract:** [`../../esp32_contract.md`](../../esp32_contract.md) — the authoritative spec. Where this file and the contract disagree, the contract wins.
-**Baseline:** forked from `ESP32/Firmware/Firmware.ino` v3.0.0. See [`../../Firmware/firmware_doc.md`](../../Firmware/firmware_doc.md) for the full architecture reference — this document only covers what is **different** in the Workbench build.
+**Superseded by:** [`../../Workbench/Firmware/v4.1.0/firmware_doc.md`](../../Workbench/Firmware/v4.1.0/firmware_doc.md) — the authoritative ESP32 reference since 2026-10-23. `esp32_contract.md` is also superseded.
+
+> ⚠️ **Folder is mislabelled.** This directory is named `Frimware_v3.0.0` but holds **v4.0.0-p1** content, and this file duplicates `Workbench/Firmware/v4.0.0/firmware_doc.md`. Genuine v3.0.0 exists only in git (`4fa8299`). Folder organisation is owner-owned — flagged, not changed.
+**Baseline:** forked from `ESP32/Firmware/Firmware.ino` v3.0.0. The old link here pointed at `../../Firmware/firmware_doc.md`, **which does not exist**. The full architecture reference is now [`../../Workbench/Firmware/v4.1.0/firmware_doc.md`](../../Workbench/Firmware/v4.1.0/firmware_doc.md) §8–§15.
 **Doc last reconciled against code:** 2026-08-25
 
 ---

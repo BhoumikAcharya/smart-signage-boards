@@ -3,8 +3,8 @@
 **Phase:** 1 · Part 1 — *hardcoded bench build, no battery*
 **Role:** Hardware edge controller & network node (bring-up / connectivity testing)
 **Pairs with:** `RaspberryPi/Gateway/Pi.py` v2.0.0
-**Contract:** [`../../../esp32_contract.md`](../../../esp32_contract.md) — the authoritative spec. Where this file and the contract disagree, the contract wins.
-**Baseline:** forked from `ESP32/Firmware/Firmware.ino` v3.0.0. See [`../../../Firmware/Frimware_v3.0.0/firmware_doc.md`](../../../Firmware/Frimware_v3.0.0/firmware_doc.md) for the full architecture reference — this document only covers what is **different** in the Workbench build.
+**Superseded by:** [`../v4.1.0/firmware_doc.md`](../v4.1.0/firmware_doc.md) — the authoritative ESP32 reference since 2026-10-23. This file is the Part-1 delta, kept for history. `esp32_contract.md` is also superseded.
+**Baseline:** forked from `ESP32/Firmware/Firmware.ino` v3.0.0 (recoverable only from git: `4fa8299`). This document covers only what is **different** from that build. The full architecture reference is now [`../v4.1.0/firmware_doc.md`](../v4.1.0/firmware_doc.md) §8–§15 — the old baseline link pointed at a copy of this same file and was circular.
 **Doc last reconciled against code:** 2026-08-25
 
 ---
